@@ -16,7 +16,7 @@
 
 | 能力               | 说明                                                                                                                                         |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Junk Code        | 生成 [utility 类](#术语说明) 增加 DEX 差异（`light` / `medium` / `heavy`）；可选增加 Activity，需 `activityCountPerPackage` + `mergeJunkManifest` 才写入 Manifest |
+| Junk Code        | 生成 [utility 类](#术语说明) 增加 DEX 差异（`light` / `medium` / `heavy`）；可选生成 Activity，需 `activityCountPerPackage` + `mergeJunkManifest` 才写入 Manifest |
 | 资源 Overlay       | 编译期 source set 改写图片 metadata、可选 XML 注释（打包前）                                                                                                |
 | 资源表混淆            | 产物打包后改写 APK/AAB 内 `resources.arsc` 与 res 路径                                                                                                |
 | Component 改类名    | 将四大组件完整类名映射为随机短名（如 `SplashActivity` → `e3.gj1`），改写 DEX / Manifest                                                                          |
