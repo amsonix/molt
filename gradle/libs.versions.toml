@@ -1,0 +1,11 @@
+[versions]
+agp = "8.13.2"
+kotlin = "2.2.0"
+junit = "4.13.2"
+firebaseCrashlyticsPlugin = "3.0.3"
+
+[libraries]
+android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+firebase-crashlytics-gradle-plugin = { module = "com.google.firebase:firebase-crashlytics-gradle", version.ref = "firebaseCrashlyticsPlugin" }
+junit = { module = "junit:junit", version.ref = "junit" }

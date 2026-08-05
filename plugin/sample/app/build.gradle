@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+    id 'io.github.amsonix.molt'
+}
+
+android {
+    namespace 'com.example.shell.sample'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.example.shell.sample'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    flavorDimensions 'channel'
+    productFlavors {
+        google { dimension 'channel' }
+        samsung { dimension 'channel' }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation project(':library')
+}
+
+molt {
+    enabledBuildTypes.set(['release'])
+    seed.set(7)
+    junkCode.profile.set('light')
+    junkCode.activityCountPerPackage.set(1)
+    junkCode.mergeJunkManifest.set(true)
+    resourceObfuscate.renameXmlFiles.set(false)
+    resourceObfuscate.injectXmlJunk.set(false)
+    resourceObfuscate.imageAntiDetect.set(false)
+    bundleResourceObfuscate.enabled.set(false)
+    bundleResourceObfuscate.obfuscateApk.set(false)
+    componentRename.enabled.set(false)
+    viewRename.enabled.set(false)
+}
