@@ -1,13 +1,48 @@
 # Molt Gradle Plugin
 
-为 Android **多包 / 马甲包**场景提供构建期混淆能力：在常规 `assemble` / `bundle` 流程中自动注入 Junk Code、改写资源与 DEX，并输出完整 mapping。
+为 Android **多包 / 马甲包**场景提供构建期混淆：在常规 `assemble` / `bundle` 流程中自动注入 Junk Code、改写资源与 DEX，并输出完整 mapping。**无需额外 Gradle 任务**。
 
-| | |
-|---|---|
-| Plugin ID | `io.github.amsonix.molt` |
-| 扩展块 | `molt { }` |
-| 当前版本 | `1.0.0` |
-| 要求 | AGP 8.13.x · JDK 17+ · Release 开启代码混淆 |
+
+|           |                                                     |
+| --------- | --------------------------------------------------- |
+| Plugin ID | `io.github.amsonix.molt`                            |
+| 扩展块       | `molt { }`                                          |
+| 当前版本      | `1.0.0`                                             |
+| 要求        | AGP 8.13.x · JDK 17+ · Release 开启 `isMinifyEnabled` |
+
+**目录**：[它能做什么](#它能做什么) · [术语说明](#术语说明) · [快速开始](#快速开始) · [常用配置](#常用配置) · [配置模板](#配置模板) · [保护关键资源](#保护关键资源) · [注意事项](#注意事项)
+
+## 它能做什么
+
+挂接 `assemble` / `bundle`。合成 mapping 输出至 `app/build/outputs/mapping/<variant>/shell-obfuscate-mapping.txt`。
+
+
+| 能力               | 说明                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Junk Code        | 生成 utility Java 类增加 DEX 差异（`light` / `medium` / `heavy`）；可选增加 Activity，需 `activityCountPerPackage` + `mergeJunkManifest` 才写入 Manifest |
+| 资源 Overlay       | 编译期 source set 改写图片 metadata、可选 XML 注释（打包前）                                                                                              |
+| 资源表混淆            | 产物打包后改写 APK/AAB 内 `resources.arsc` 与 res 路径                                                                                           |
+| Component 改类名    | 将四大组件完整类名映射为随机短名（如 `SplashActivity` → `e3.gj1`），改写 DEX / Manifest |
+| View 改类名         | 替换 layout 中自定义 View 的完整类名 |
+| Mapping 合成       | 合并 R8、资源、改类名对照表，供 Crashlytics 上传 |
+| Baseline Profile | 按合成 mapping 重编 `baseline.prof` / `baseline.profm`                                                                                     |
+| Keep 验包          | 可选校验 keep 资源未被误混淆                                                                                                                     |
+
+> **执行顺序**：编译期 Junk / 资源 Overlay → R8 代码混淆 → R8 完成后改类名与资源表混淆 → 合成 mapping。
+
+## 术语说明
+
+| 术语 | 含义 |
+|------|------|
+| AGP | Android Gradle Plugin，Android 构建插件 |
+| R8 | Android 官方代码压缩与混淆工具；Release 需开启 `isMinifyEnabled` |
+| R8 完成后 | R8 跑完、APK/AAB 最终打包前的产物变换阶段（文档中曾写作 post-R8） |
+| DEX | Android 字节码，打进 APK/AAB 的可执行代码 |
+| 完整类名（FQCN） | 含包名的类全名，如 `com.example.SplashActivity` |
+| Overlay | 编译期在源码 / 资源目录上叠加改写，再参与编译（打包前） |
+| mapping | 混淆前后名称对照表，用于崩溃还原与 Crashlytics |
+| Manifest | 应用清单 `AndroidManifest.xml` |
+| variant | 构建变体，如 `googleRelease`（flavor + buildType，全小写） |
 
 ## 快速开始
 
@@ -29,7 +64,7 @@ plugins {
 }
 ```
 
-> 本地开发插件本身时，可用 Composite build：`pluginManagement { includeBuild("path/to/molt") }`。
+> 本地开发插件本身时，可用 Composite build：`pluginManagement { includeBuild("path/to/molt") }`，app 侧 `molt { }` 配置不变。
 
 **2. 应用到 app 模块**
 
@@ -55,6 +90,8 @@ molt {
 }
 ```
 
+更多配置见 [配置模板](#配置模板) 或 [完整配置参考](docs/CONFIG.md)。
+
 **3. 正常构建**
 
 ```bash
@@ -63,187 +100,75 @@ molt {
 ./gradlew :app:bundleRelease
 ```
 
-插件会自动完成资源 overlay、APK/AAB 产物变换与 mapping 合成，**无需额外 Gradle 任务**。
+## 常用配置
 
-## 它能做什么
+日常接入通常只需下列子块。**全部选项**（顶层、`resourceObfuscate` 细项、`verify*` / `failOn*` 等）见 [docs/CONFIG.md](docs/CONFIG.md)。
 
-### 增加包体差异
+### 顶层（常用）
 
-| 能力 | 说明 |
-|------|------|
-| Junk Code | 生成随机 Java 类，可选写入 Manifest（`light` / `medium` / `heavy`） |
-| 资源 Overlay | 编译期改写图片 metadata、注入 XML 注释，支持增量缓存 |
-| 资源表混淆 | 改写 APK/AAB 内 `resources.arsc` 的资源名与路径 |
-| Component 改包 | 将 Activity、Service 等组件移到随机包名 |
-| View 改类名 | 替换 layout 中自定义 View 的类名 |
-
-### 构建集成
-
-| 能力 | 说明 |
-|------|------|
-| Mapping 合成 | 合并代码混淆、资源、改包映射，输出到 `app/build/outputs/mapping/<variant>/shell-obfuscate-mapping.txt` |
-| Crashlytics | 默认 hook `uploadCrashlyticsMappingFile*`，上传合成 mapping（`hookCrashlyticsMappingUpload` 可关） |
-| Baseline Profile | 按合成 mapping 重编 `baseline.prof` / `baseline.profm` |
-| Keep 验包 | 可选校验 keep 资源未被误混淆（`verifyApkKeep` / `verifyBundleKeep`） |
-
-## 配置参考
-
-以下为 `molt { }` 扩展块全部公开配置项。未列出的 `variantConfig` 子项见各表「variant 可覆盖」列。
-
-### 顶层
-
-| 选项 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `enabled` | `Boolean` | `true` | 插件总开关 |
-| `enabledBuildTypes` | `List<String>` | `alpha`, `release` | 仅对列出的 buildType 生效 |
-| `seed` | `Int` | `applicationId.hashCode()` | 混淆随机种子；同包名保持一致 |
-| `keepXmlFiles` | `FileCollection` | 空 | 额外 keep.xml 文件，与自动发现合并 |
-| `autoDiscoverKeepXml` | `Boolean` | `true` | 自动扫描 app 与 library 的 `res/raw/keep.xml` |
-| `mergeShrinkKeepXml` | `Boolean` | `false` | 合并外部 shrink-resources 插件产出的 keep |
-| `shrinkKeepRelativePath` | `String` | `generated/shrink-resources/{variant}/res/raw/keep.xml` | shrink keep 路径模板 |
-| `shrinkKeepGenerateTaskName` | `String` | `generateShrinkKeepXml{Variant}` | shrink keep 生成任务名模板 |
-| `verifyApkKeep` | `Boolean` | `false` | APK 构建后校验 keep 资源未被混淆 |
-| `failOnMissingApkKeep` | `Boolean` | `true` | `verifyApkKeep` 发现缺失时 fail build |
-| `verifyBundleKeep` | `Boolean` | `false` | AAB 构建后校验 keep 资源未被混淆 |
-| `failOnMissingBundleKeep` | `Boolean` | `true` | `verifyBundleKeep` 发现缺失时 fail build |
-| `useFirebaseArtifactVerifyBaseline` | `Boolean` | `false` | 启用 Firebase/google-services 内置验包 baseline |
-| `hookCrashlyticsMappingUpload` | `Boolean` | `true` | hook Crashlytics 上传任务读取合成 mapping |
-| `failOnEmptyArtifactVerifyBaseline` | `Boolean` | `true` | 验包开启但 baseline 为空时 fail build |
-| `failOnMissingShrinkKeepTask` | `Boolean` | `true` | `mergeShrinkKeepXml` 开启但任务不存在时 fail |
-| `failOnJunkManifestMergeFailure` | `Boolean` | `true` | Junk Manifest 合并失败时 fail build |
-| `allowUnsignedOutput` | `Boolean` | `false` | 允许输出未签名包（仅本地调试） |
-| `failOnAgpToolchainMismatch` | `Boolean` | `false` | AGP 与插件 pin 版本不一致时 fail build |
-| `axmlStrictMode` | `Boolean` | `false` | binary layout 无法改 View 类名时 fail build |
-| `projectPackagePrefixes` | `List<String>` | 由 `applicationId` 推导 | DEX 伴生类识别的工程包前缀 |
-| `syncBaselineProfile` | `Boolean` | `true` | 按合成 mapping 重编 baseline profile |
-| `failOnBaselineProfileSyncFailure` | `Boolean` | `true` | profile 重编失败时 fail build |
-| `baselineProfileHumanReadable` | `File` | variant 默认路径 | 覆盖 `baseline-prof.txt` 输入 |
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| `enabled` | `true` | 插件总开关 |
+| `enabledBuildTypes` | `alpha`, `release` | 仅对列出的 buildType 生效 |
+| `seed` | `applicationId.hashCode()` | 混淆随机种子；同包名保持一致 |
+| `autoDiscoverKeepXml` | `true` | 自动扫描 `res/raw/keep.xml` |
 
 ### `junkCode { }`
 
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | Junk Code 开关 | ✓ |
-| `profile` | `String` | `light` | 量级 preset，见下表 | ✓ |
-| `packageCount` | `Int` | `5` | 子包数量（`custom` 时生效） | ✓ |
-| `classCount` | `Int` | `30` | utility 类总数（`custom` 时生效） | ✓ |
-| `methodsPerClass` | `Int` | `8` | 每类方法数（`custom` 时生效） | ✓ |
-| `activityCountPerPackage` | `Int` | `0` | 每子包 Activity 数 | ✓ |
-| `excludeActivityJavaFile` | `Boolean` | `false` | 跳过 Activity `.java`，仍生成 layout / Manifest | ✓ |
-| `mergeJunkManifest` | `Boolean` | `false` | 将 Junk Activity 写入 Manifest | ✓ |
-| `resPrefix` | `String` | `junk_` | Activity layout 资源名前缀 | ✓ |
-| `packagePrefix` | `String` | `{applicationId}.shell.junk` | Junk 类包名前缀 | — |
+编译期生成 Junk 代码并打进 DEX。
 
-**`profile` preset 对照**
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| `profile` | `light` | utility 类量级：`light` / `medium` / `heavy` / `custom` |
+| `activityCountPerPackage` | `0` | 每子包 Activity 数；`0` = 不生成组件 |
+| `mergeJunkManifest` | `false` | 合并 Junk Activity 到 Manifest（需上项 > 0） |
 
-| profile | 子包数 | 类数 | 每类方法数 |
-|---------|--------|------|-----------|
-| `light` | 5 | 30 | 8 |
-| `medium` | 10 | 100 | 12 |
-| `heavy` | 30 | 1500 | 20 |
-| `custom` | 使用上方 `packageCount` / `classCount` / `methodsPerClass` | | |
-
-### `resourceObfuscate { }`
-
-编译期资源 overlay（图片改写、XML 注入等）。
-
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | 资源 overlay 开关 | ✓ |
-| `renameXmlFiles` | `Boolean` | `false` | 混淆 XML 文件名 | ✓ |
-| `injectXmlJunk` | `Boolean` | `false` | 在 layout 末尾注入注释占位 | ✓ |
-| `imageAntiDetect` | `Boolean` | `true` | 编译期图片 metadata 改写 | ✓ |
-| `imageMicroCompress` | `Boolean` | `true` | 图片微压缩总开关 | — |
-| `imagePngMicroCompress` | `Boolean` | `false` | PNG 微压缩 | ✓ |
-| `imageJpegMicroCompress` | `Boolean` | `true` | JPEG 微压缩 | ✓ |
-| `imageMicroCompressQuality` | `Float` | `0.97` | 微压缩质量（0~1） | — |
-| `imageJpegMetadataMode` | `String` | `both` | JPEG metadata 注入模式：`com` / `exif` / `both` | — |
-| `imagePngExtraChunks` | `Boolean` | `true` | PNG 追加 extra chunk | — |
-| `imagePerceptualNoise` | `Boolean` | `false` | LSB 微扰动（防 pHash 场景） | — |
-| `verifyImageAntiDetect` | `Boolean` | `true` | overlay 阶段校验图片改写生效 | — |
-| `failOnUnchangedImageAntiDetect` | `Boolean` | `true` | 图片未改写时 fail build | — |
-| `imageAntiDetectApkFallback` | `Boolean` | `true` | APK 产物变换阶段图片 metadata 兜底 | — |
-| `verifyApkImageAntiDetect` | `Boolean` | `false` | APK 构建后 decode 校验全部 res 图片 | — |
-| `failOnApkImageAntiDetectFailure` | `Boolean` | `true` | APK 图片校验失败时 fail build | — |
-| `failOnSkippedUnsupportedImageAntiDetect` | `Boolean` | `false` | overlay 无法处理 PNG/JPEG 时 fail build | — |
-| `imageAntiDetectBundleFallback` | `Boolean` | `true` | AAB 产物变换阶段图片 metadata 兜底 | — |
-| `verifyBundleImageAntiDetect` | `Boolean` | `false` | AAB 构建后 decode 校验全部 res 图片 | — |
-| `failOnBundleImageAntiDetectFailure` | `Boolean` | `true` | AAB 图片校验失败时 fail build | — |
-| `overlayParallelism` | `Int` | `0` | overlay 并行度；`0` = min(4, CPU) | — |
-| `incrementalOverlay` | `Boolean` | `true` | 按 res 目录 fingerprint 增量 skip | ✓ |
-| `maxWebpExtendedSkipRatio` | `Double` | `0.05` | WebP 扩展格式 skip 占比阈值；`0` = 不校验 | — |
-
-### `bundleResourceObfuscate { }`
-
-APK / AAB 内 `resources.arsc` 与 res 路径混淆。
-
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | AAB 资源表混淆 | ✓ |
-| `obfuscateApk` | `Boolean` | `true` | APK 资源表混淆 | ✓ |
-| `obfuscationMode` | `String` | `default` | 混淆模式：`default` / `dir` / `file` | — |
-| `mappingFile` | `File` | 自动生成 | 增量复用的 `resources-mapping.txt` | — |
-| `reuseIncrementalMapping` | `Boolean` | `true` | 自动复用上次 Transform 的 mapping | — |
-
-### `componentRename { }`
-
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | Component（Activity / Service 等）改包 | ✓ |
-| `excludePatterns` | `List<String>` | `*.debug.*`, `*Hilt_*`, `*_HiltModules*` | 不参与改包的类名 glob | — |
-
-### `viewRename { }`
-
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | 自定义 View 改类名 | ✓ |
-| `excludePatterns` | `List<String>` | `*.debug.*`, `*Hilt_*`, `*_HiltModules*` | 不参与改名的类名 glob | — |
-| `excludeResXmlEntryPatterns` | `List<String>` | 内置广告 SDK layout 规则 | 跳过改写的 layout 路径 glob | — |
-
-### `variantConfig { create("<variant>") { } }`
-
-按 variant 名（如 `googleRelease`）覆盖全局配置。variant 名 = flavor + buildType 拼接（全小写）。
+`profile` preset（仅 utility 类）：`light` 30 类 · `medium` 100 类 · `heavy` 1500 类。详见 [CONFIG.md](docs/CONFIG.md#junkcode--)。
 
 ```kotlin
-variantConfig {
-    create("googleRelease") {
-        seed.set(42)
-        junkCode { profile.set("heavy") }
-        resourceObfuscate { imageAntiDetect.set(false) }
-        bundleResourceObfuscate { obfuscateApk.set(false) }
-        componentRename { enabled.set(false) }
-        viewRename { enabled.set(false) }
-        verify {
-            verifyApkKeep.set(true)
-            verifyBundleKeep.set(true)
-        }
+// 默认：仅 utility 类
+molt { junkCode { profile.set("light") } }
+
+// utility + Activity 并写入 Manifest
+molt {
+    junkCode {
+        profile.set("medium")
+        activityCountPerPackage.set(2)
+        mergeJunkManifest.set(true)
     }
 }
 ```
 
-| 子块 | 可覆盖项 |
-|------|----------|
-| （顶层） | `seed` |
-| `junkCode` | `enabled`, `profile`, `packageCount`, `classCount`, `methodsPerClass`, `activityCountPerPackage`, `excludeActivityJavaFile`, `mergeJunkManifest`, `resPrefix` |
-| `resourceObfuscate` | `enabled`, `renameXmlFiles`, `injectXmlJunk`, `imageAntiDetect`, `imagePngMicroCompress`, `imageJpegMicroCompress`, `incrementalOverlay` |
-| `bundleResourceObfuscate` | `enabled`, `obfuscateApk` |
-| `componentRename` | `enabled` |
-| `viewRename` | `enabled` |
-| `verify` | `verifyApkKeep`, `verifyBundleKeep` |
+### `componentRename { }` / `viewRename { }`
 
-## 配置说明
+R8 完成后改类名（见 [术语说明](#术语说明)）。组件表示例：
 
-查阅上方配置参考后，可按场景选用以下模板。
+```
+com.shortvideo.playlet.SplashActivity  →  e3.gj1
+```
+
+类名 simple name **也会变**，不是「只换包名」。两子块默认均为 `enabled = true`，可按 variant 关闭。
+
+### `variantConfig { create("<variant>") { } }`
+
+按 variant 名（如 `googleRelease`）覆盖全局配置：
+
+```kotlin
+variantConfig {
+    create("googleRelease") {
+        junkCode { profile.set("heavy") }
+        componentRename { enabled.set(false) }
+    }
+}
+```
+
+可覆盖项汇总见 [CONFIG.md → variantConfig](docs/CONFIG.md#variantconfig-createvariant--)。
+
+## 配置模板
 
 ### 最小配置
 
-只开 Junk Code，其余走默认值：
-
-```kotlin
-molt {
-    junkCode { profile.set("light") }
-}
-```
+同 [快速开始](#快速开始) 第 2 步：仅 `junkCode { profile.set("light") }`，其余保持默认。
 
 ### 生产环境推荐
 
@@ -253,7 +178,9 @@ molt {
 
     junkCode {
         profile.set("medium")
-        mergeJunkManifest.set(false)
+        // 默认不生成 Activity、不写 Manifest；需要时再开：
+        // activityCountPerPackage.set(2)
+        // mergeJunkManifest.set(true)
     }
 
     resourceObfuscate {
@@ -273,6 +200,10 @@ molt {
     variantConfig {
         create("googleRelease") {
             junkCode { profile.set("heavy") }
+            verify {
+                verifyApkKeep.set(true)
+                verifyBundleKeep.set(true)
+            }
         }
     }
 }
@@ -288,16 +219,17 @@ molt {
 ```
 
 - **精确条目**（`@layout/foo`）：制品中存在时保留原名
-- **通配前缀**（`@drawable/ad_*`）：仅作白名单，不要求制品必含
+- **通配前缀**（`@drawable/ad_`*）：仅作白名单，不要求制品必含
 
 插件会自动合并 app 与依赖 library 中的 keep 文件。
 
 ## 注意事项
 
-1. **Release 必须开启代码混淆**（`isMinifyEnabled = true`），Component / View 改包才有可处理的 DEX。
-2. **Debug 默认不生效**；若需对 debug 构建启用，加入 `enabledBuildTypes`。
-3. **keep 先于混淆**：SDK 关键资源（广告、Firebase 等）务必写入 keep.xml，避免运行时找不到资源。
-4. **AGP 版本**：建议使用 8.13.x；版本不一致时会 warn，可通过 `failOnAgpToolchainMismatch` 改为 fail build。
+1. **Release 必须开启 R8**（`isMinifyEnabled = true`），Component / View 改类名在 R8 完成后 patch DEX，无混淆则跳过。
+2. **默认 buildType**：插件仅对 `alpha`、`release` 生效（`enabledBuildTypes`）；工程若无 `alpha` 可改为 `listOf("release")`；要对 debug 构建生效需加入 `debug`。
+3. **Junk `profile` ≠ Manifest**：`light/medium/heavy` 只调 utility 类数量；Manifest 变更需 `activityCountPerPackage` + `mergeJunkManifest`。
+4. **keep 先于混淆**：广告 / Firebase 等 SDK 关键资源写入 `keep.xml`，并视情况开启 `verifyApkKeep` / `verifyBundleKeep`。
+5. **AGP 版本**：建议 8.13.x；不一致时默认 warn，可设 `failOnAgpToolchainMismatch = true` 强制 fail。
 
 ## 示例工程
 
@@ -311,8 +243,12 @@ molt {
 
 ## 更多文档
 
+
 | 文档 | 受众 |
 |------|------|
+| [docs/CONFIG.md](docs/CONFIG.md) | 全部配置项参考 |
 | [sample/README.md](sample/README.md) | 接入示例 |
 | [plugin/CHANGELOG.md](plugin/CHANGELOG.md) | 版本变更 |
 | [plugin/README.md](plugin/README.md) | 插件开发与发布 |
+
+
