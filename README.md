@@ -29,6 +29,8 @@ plugins {
 }
 ```
 
+> 本地开发插件本身时，可用 Composite build：`pluginManagement { includeBuild("path/to/molt") }`。
+
 **2. 应用到 app 模块**
 
 `app/build.gradle.kts`：
@@ -62,8 +64,6 @@ molt {
 ```
 
 插件会自动完成资源 overlay、APK/AAB 产物变换与 mapping 合成，**无需额外 Gradle 任务**。
-
-> 本地开发插件本身时，可用 Composite build：`pluginManagement { includeBuild("path/to/molt") }`，app 侧配置不变。
 
 ## 它能做什么
 

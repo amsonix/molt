@@ -1,0 +1,30 @@
+gradle.beforeProject { project ->
+    if (project.path != ":plugin") {
+        return
+    }
+    project.buildscript {
+        repositories {
+            gradlePluginPortal()
+        }
+        dependencies {
+            classpath("com.gradle.publish:plugin-publish-plugin:1.3.1")
+        }
+    }
+}
+
+gradle.projectsLoaded {
+    def pluginProject = gradle.rootProject.findProject(":plugin")
+    if (pluginProject == null) {
+        return
+    }
+    pluginProject.afterEvaluate { project ->
+        if (project.plugins.hasPlugin("com.gradle.plugin-publish")) {
+            return
+        }
+        project.apply(plugin: "com.gradle.plugin-publish")
+        project.gradlePlugin {
+            website = "https://github.com/amsonix/molt"
+            vcsUrl = "https://github.com/amsonix/molt.git"
+        }
+    }
+}
