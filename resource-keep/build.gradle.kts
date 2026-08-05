@@ -6,7 +6,7 @@ plugins {
 import java.util.Properties
 
 group = "io.github.amsonix.molt"
-version = providers.gradleProperty("moltVersion").orElse("0.1.0-SNAPSHOT").get()
+version = providers.gradleProperty("moltVersion").orElse("1.0.0").get()
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17

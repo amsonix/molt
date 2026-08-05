@@ -21,7 +21,7 @@ internal object DexIntegrationFixture {
     }
 
     private fun sampleRoot(root: File): File? = when {
-        File(root, "plugin/sample/app").isDirectory -> File(root, "plugin/sample")
+        File(root, "sample/app").isDirectory -> File(root, "sample")
         File(root, "sample/app").isDirectory -> File(root, "sample")
         else -> null
     }

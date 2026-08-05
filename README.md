@@ -2,58 +2,52 @@
 
 Android **马甲包一站式混淆** Gradle 插件。
 
-在标准 Android 构建流程上叠加编译期改写与 post-R8 产物变换，用于降低多包同构时的资源、DEX、Layout 相似度，并合成完整 mapping 供 Crashlytics 等工具使用。
+在标准 Android 构建流程上叠加编译期改写与打包产物变换，用于降低多包同构时的资源、DEX、Layout 相似度，并合成完整 mapping 供 Crashlytics 等工具使用。
 
 ## 能力概览
-
-按构建阶段划分如下：
 
 | 阶段 | 能力 | 说明 |
 |------|------|------|
 | 编译期 | **Junk Code** | 生成随机 utility 类 / Activity，可选合并进 Manifest |
 | 编译期 | **资源 Overlay** | 对 `res/` 做编译期 overlay：图片 metadata 改写、XML 注入、增量 fingerprint 缓存 |
-| post-R8 | **资源表混淆** | 改写 APK / AAB 内 `resources.arsc` 的 entry 名与路径（dir / file 模式） |
-| post-R8 | **Component 改包** | 扫描 R8 后 DEX，将 Activity / Service 等改写到随机包名 |
-| post-R8 | **View 改类名** | 替换 layout 中自定义 View 的 FQCN（binary / plain-text XML） |
-| post-R8 | **图片兜底** | Transform 阶段对 APK / AAB 内图片 entry 做 metadata 注入与 decode 校验 |
-| post-R8 | **Baseline Profile** | 按合成 mapping 重编 `baseline.prof` / `baseline.profm` |
-| 产物 | **Mapping 合成** | 合并 R8、资源、rename 映射，可选 hook Crashlytics upload |
+| 打包后 | **资源表混淆** | 改写 APK / AAB 内 `resources.arsc` 的 entry 名与路径（dir / file 模式） |
+| 打包后 | **Component 改包** | 扫描 APK / AAB 中的 DEX，将 Activity / Service 等改写到随机包名 |
+| 打包后 | **View 改类名** | 替换 layout 中自定义 View 的完整类名（binary / plain-text XML） |
+| 打包后 | **图片兜底** | 对 APK / AAB 内图片 entry 做 metadata 注入与 decode 校验 |
+| 打包后 | **Baseline Profile** | 按合成 mapping 重编 `baseline.prof` / `baseline.profm` |
+| 产物 | **Mapping 合成** | 合并代码混淆、资源、改包映射，可选 hook Crashlytics upload |
 | 产物 | **Keep 验包** | 校验 keep.xml / Firebase baseline 声明的资源未被混淆改写 |
 
-### 子模块
+## 环境要求
 
-| 模块 | 职责 |
-|------|------|
-| `resource-keep` | `keep.xml` 解析、合并与 Firebase / SDK 静态 baseline |
-| `plugin` | Gradle 插件实现与 variant 任务接线 |
-| `plugin/sample` | 最小示例（app + library + flavor） |
+| 项 | 要求 |
+|----|------|
+| AGP | **8.13.x**（插件当前 pin 版本；漂移时会 warn，可设 `failOnAgpToolchainMismatch` 强制 fail） |
+| JDK | **17+** |
+| 代码混淆 | Release 构建须开启 `minifyEnabled true`（Component / View 改包依赖混淆后的 DEX） |
+| 生效 BuildType | 默认仅 `alpha`、`release`；其他类型需在 `enabledBuildTypes` 中显式加入 |
 
-### 典型产物变换链路
-
-```
-R8 产出 APK/AAB
-    → 资源表混淆 (resources.arsc)
-    → DEX Component 改包 + Layout View 改类名
-    → 图片 metadata 兜底
-    → Baseline Profile 重编
-    → 重签名 / zipalign
-    → Keep / 图片验包（可选）
-    → 合成 mapping.txt
-```
-
-## 快速开始
+## 接入
 
 **Plugin ID**：`io.github.amsonix.molt`  
 **扩展块**：`molt { }`
 
-### Composite build（开发联调）
+### Maven 依赖
 
-宿主 `settings.gradle.kts`：
+根工程 `settings.gradle.kts`：
 
 ```kotlin
 pluginManagement {
-    includeBuild("path/to/molt")
-    repositories { google(); mavenCentral(); gradlePluginPortal() }
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+        // SNAPSHOT / 私有发布需添加 Nexus 仓库
+    }
+}
+
+plugins {
+    id("io.github.amsonix.molt") version "1.0.0" apply false
 }
 ```
 
@@ -65,79 +59,110 @@ plugins {
     id("io.github.amsonix.molt")
 }
 
+android {
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            proguardFiles(/* ... */)
+        }
+    }
+}
+
 molt {
     junkCode { profile.set("light") }
 }
 ```
 
-### 构建示例工程
+### Composite build（本地联调）
 
-```bash
-./gradlew -p plugin/sample :app:assembleGoogleRelease
+```kotlin
+// settings.gradle.kts
+pluginManagement {
+    includeBuild("path/to/molt")
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+}
 ```
 
-### 插件自测
+`app/build.gradle.kts` 配置同上。
 
-```bash
-./gradlew :plugin:moltObfuscateCheck              # 单元测试
-./gradlew :plugin:moltObfuscateTransformE2eTest   # TestKit E2E（需 Android SDK）
-./tools/molt-verify.sh                            # nightly 套件
+## 常用配置
+
+```kotlin
+molt {
+    // 仅对指定 buildType 生效（默认 alpha + release）
+    enabledBuildTypes.set(listOf("release"))
+
+    // 混淆种子；默认由 applicationId 推导
+    // seed.set(42)
+
+    junkCode {
+        profile.set("light")              // light / medium / heavy / custom
+        mergeJunkManifest.set(false)
+    }
+
+    resourceObfuscate {
+        imageAntiDetect.set(true)         // 编译期图片 metadata 改写
+        renameXmlFiles.set(false)
+    }
+
+    bundleResourceObfuscate {
+        enabled.set(true)                 // AAB resources.arsc 混淆
+        obfuscateApk.set(true)            // APK resources.arsc 混淆
+    }
+
+    componentRename { enabled.set(true) }   // Component 改包
+    viewRename { enabled.set(true) }      // View 改类名
+
+    autoDiscoverKeepXml.set(true)         // 自动扫描 keep.xml
+
+    variantConfig {
+        create("googleRelease") {
+            junkCode { profile.set("medium") }
+        }
+    }
+}
 ```
 
-## 发布 Maven
+执行 `assemble*` / `bundle*` 时会自动串联资源 overlay → 产物变换 → mapping 合成，无需手动触发任务。
 
-版本号：`gradle.properties` → `moltVersion`
+## 构建产物
 
-```bash
-./gradlew :plugin:publishMoltObfuscatePlugin
+合成 mapping 默认输出至：
+
+```
+app/build/outputs/mapping/<variant>/shell-obfuscate-mapping.txt
 ```
 
-| 坐标 | 说明 |
+集成 Firebase Crashlytics 时，插件默认 hook `uploadCrashlyticsMappingFile*` 任务读取上述文件（可通过 `hookCrashlyticsMappingUpload` 关闭）。
+
+## Keep 资源
+
+在各模块 `res/raw/keep.xml` 中声明不可混淆的资源：
+
+```xml
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/app_name,@layout/activity_main" />
+```
+
+- **精确条目**（如 `@layout/foo`）：资源存在于制品中时保留原名
+- **通配前缀**（如 `@drawable/ad_*`）：仅参与白名单，不要求 APK/AAB 必含
+
+插件会自动发现并合并 app 与各 `android.library` 模块中的 keep 文件。Firebase 集成工程可额外开启 `useFirebaseArtifactVerifyBaseline` 做构建期验包。
+
+## 示例工程
+
+`sample` 提供 app + library + flavor 的最小接入示例（部分能力默认关闭以便快速构建）：
+
+```bash
+./gradlew -p sample :app:assembleGoogleRelease
+```
+
+详见 [sample/README.md](sample/README.md)。
+
+## 更多文档
+
+| 文档 | 说明 |
 |------|------|
-| `io.github.amsonix.molt:resource-keep:<version>` | keep 库 |
-| `io.github.amsonix.molt:io.github.amsonix.molt.gradle.plugin:<version>` | 插件 marker |
-| `io.github.amsonix.molt:plugin:<version>` | 插件实现 |
-
-需配置 `NEXUS_USERNAME` / `NEXUS_PASSWORD`（或写入 `gradle.properties`）。
-
-## 可选：宿主工程集成探针
-
-若本地有完整 Android 宿主工程（含 `app` 模块），可指定根目录：
-
-```bash
-export MOLT_INTEGRATION_ROOT=/path/to/host-android-project
-RUN_MAPPING_PARITY=1 ./tools/molt-verify.sh
-```
-
-或通过 Gradle：`-PintegrationRoot=/path/to/host-android-project`
-
-## Gradle 任务
-
-以 app 模块 `googleRelease` variant 为例：
-
-| 任务 | 作用 |
-|------|------|
-| `moltObfuscatePrepareMappingGoogleRelease` | 准备 mapping 输入 |
-| `moltObfuscateResourcesGoogleRelease` | 编译期资源 overlay |
-| `moltObfuscateJunkCodeGoogleRelease` | 生成 junk 源码 |
-| `moltObfuscateTransformApkGoogleRelease` | post-R8 APK 变换 |
-| `moltObfuscateTransformBundleGoogleRelease` | post-R8 AAB 变换 |
-| `moltObfuscateMergeMappingGoogleRelease` | 合成最终 mapping |
-| `moltObfuscateGenerateJunkKeep` | 生成 junk 对应 ProGuard keep |
-
-插件模块验证任务：`:plugin:moltObfuscateCheck`、`:plugin:moltObfuscateNightlyVerify` 等。
-
-<details>
-<summary>从 shell-obfuscate 迁移的任务名对照</summary>
-
-| 旧名 | 新名 |
-|------|------|
-| `shellObfuscatePrepareMapping*` | `moltObfuscatePrepareMapping*` |
-| `shellObfuscateResources*` | `moltObfuscateResources*` |
-| `shellObfuscateJunkCode*` | `moltObfuscateJunkCode*` |
-| `shellObfuscateTransformApk*` | `moltObfuscateTransformApk*` |
-| `shellObfuscateTransformBundle*` | `moltObfuscateTransformBundle*` |
-| `shellObfuscateMergeMapping*` | `moltObfuscateMergeMapping*` |
-| `shellObfuscateGenerateJunkKeep` | `moltObfuscateGenerateJunkKeep` |
-
-</details>
+| [sample/README.md](sample/README.md) | 示例工程说明 |
+| [plugin/CHANGELOG.md](plugin/CHANGELOG.md) | 版本变更记录 |
+| [plugin/README.md](plugin/README.md) | 插件开发、发布与 CI 验证 |

@@ -22,7 +22,7 @@ internal object IntegrationTestAssumptions {
             if (File(root, "app").isDirectory && File(root, "settings.gradle.kts").isFile) {
                 return root
             }
-            if (File(root, "plugin/sample/app").isDirectory) {
+            if (File(root, "sample/app").isDirectory) {
                 return root
             }
         }
@@ -35,7 +35,7 @@ internal object IntegrationTestAssumptions {
 
     fun sampleAppRoot(root: File = projectRoot()): File =
         when {
-            File(root, "plugin/sample/app").isDirectory -> File(root, "plugin/sample")
+            File(root, "sample/app").isDirectory -> File(root, "sample")
             File(root, "sample/app").isDirectory -> File(root, "sample")
             else -> root
         }

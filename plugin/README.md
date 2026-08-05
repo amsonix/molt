@@ -1,28 +1,77 @@
-# Molt Gradle Plugin
+# Molt Gradle Plugin（实现模块）
 
-插件实现模块。完整文档见仓库根目录 [README.md](../README.md)。
+插件实现源码。面向使用者的接入说明见仓库根目录 [README.md](../README.md)，版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
-## 快速命令
+## 开发命令
 
 ```bash
 # 单元测试
 ./gradlew :plugin:moltObfuscateCheck
 
-# 示例 App
+# TestKit E2E（需 Android SDK）
+./gradlew :plugin:moltObfuscateTransformE2eTest
+
+# 构建 sample 工程
 ./gradlew :plugin:moltObfuscateSampleAssemble
 
-# 发布（需 Nexus 凭证）
+# nightly 验证套件
+./tools/molt-verify.sh
+```
+
+## 发布 Maven
+
+版本号：`gradle.properties` → `moltVersion`
+
+```bash
 ./gradlew :plugin:publishMoltObfuscatePlugin
 ```
 
-## 接入
+| 坐标 | 说明 |
+|------|------|
+| `io.github.amsonix.molt:resource-keep:<version>` | keep 库 |
+| `io.github.amsonix.molt:io.github.amsonix.molt.gradle.plugin:<version>` | 插件 marker |
+| `io.github.amsonix.molt:plugin:<version>` | 插件实现 |
 
-```kotlin
-plugins {
-    id("io.github.amsonix.molt")
-}
+需配置 `NEXUS_USERNAME` / `NEXUS_PASSWORD`（或写入 `gradle.properties`）。
 
-molt {
-    junkCode { profile.set("light") }
-}
+## 宿主工程集成探针
+
+本地有完整 Android 宿主工程（含 `app` 模块）时，可指定根目录跑 mapping parity 等 nightly 检查：
+
+```bash
+export MOLT_INTEGRATION_ROOT=/path/to/host-android-project
+RUN_MAPPING_PARITY=1 ./tools/molt-verify.sh
 ```
+
+或通过 Gradle：`-PintegrationRoot=/path/to/host-android-project`
+
+## Gradle 任务
+
+以 app 模块 `googleRelease` variant 为例，任务会自动挂接到 `assemble` / `bundle` 流程：
+
+| 任务 | 作用 |
+|------|------|
+| `moltObfuscatePrepareMappingGoogleRelease` | 准备 mapping 输入 |
+| `moltObfuscateResourcesGoogleRelease` | 编译期资源 overlay |
+| `moltObfuscateJunkCodeGoogleRelease` | 生成 junk 源码 |
+| `moltObfuscateTransformApkGoogleRelease` | APK 产物变换 |
+| `moltObfuscateTransformBundleGoogleRelease` | AAB 产物变换 |
+| `moltObfuscateMergeMappingGoogleRelease` | 合成最终 mapping |
+| `moltObfuscateGenerateJunkKeep` | 生成 junk 对应 ProGuard keep |
+
+插件模块验证任务：`:plugin:moltObfuscateCheck`、`:plugin:moltObfuscateNightlyVerify` 等。
+
+<details>
+<summary>从 shell-obfuscate 迁移的任务名对照</summary>
+
+| 旧名 | 新名 |
+|------|------|
+| `shellObfuscatePrepareMapping*` | `moltObfuscatePrepareMapping*` |
+| `shellObfuscateResources*` | `moltObfuscateResources*` |
+| `shellObfuscateJunkCode*` | `moltObfuscateJunkCode*` |
+| `shellObfuscateTransformApk*` | `moltObfuscateTransformApk*` |
+| `shellObfuscateTransformBundle*` | `moltObfuscateTransformBundle*` |
+| `shellObfuscateMergeMapping*` | `moltObfuscateMergeMapping*` |
+| `shellObfuscateGenerateJunkKeep` | `moltObfuscateGenerateJunkKeep` |
+
+</details>

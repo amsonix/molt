@@ -7,7 +7,7 @@ plugins {
 import java.util.Properties
 
 group = "io.github.amsonix.molt"
-version = providers.gradleProperty("moltVersion").orElse("0.1.0-SNAPSHOT").get()
+version = providers.gradleProperty("moltVersion").orElse("1.0.0").get()
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -97,7 +97,7 @@ publishing {
 fun integrationVariant(): String =
     providers.gradleProperty("integrationVariant").orElse("googleRelease").get()
 
-fun sampleProjectDir(): File = rootProject.projectDir.resolve("plugin/sample")
+fun sampleProjectDir(): File = rootProject.projectDir.resolve("sample")
 
 fun optionalIntegrationRoot(): File? {
     providers.gradleProperty("integrationRoot").orNull?.let { return File(it) }
@@ -232,7 +232,7 @@ tasks.register<Exec>("moltObfuscateSampleAssemble") {
     commandLine(
         rootProject.projectDir.resolve("gradlew").absolutePath,
         "-p",
-        "plugin/sample",
+        "sample",
         ":app:assembleGoogleRelease",
         "--no-daemon",
     )

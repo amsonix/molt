@@ -7,7 +7,7 @@
 在 Molt 仓库根目录（需 `local.properties` / Android SDK）：
 
 ```bash
-./gradlew -p plugin/sample :app:assembleGoogleRelease
+./gradlew -p sample :app:assembleGoogleRelease
 ```
 
 或在插件模块内：
@@ -16,13 +16,15 @@
 ./gradlew :plugin:moltObfuscateSampleAssemble
 ```
 
-## 说明
+## 示例配置说明
 
-| 项 | 示例配置 |
-|----|----------|
-| 插件来源 | `includeBuild("../..")` 引用 Molt 根工程 |
-| Plugin ID | `io.github.amsonix.molt` |
-| keep | `library/src/main/res/raw/keep.xml` |
-| DSL | `molt { }` |
+| 项 | 值 | 说明 |
+|----|----|------|
+| 插件来源 | `includeBuild("..")` | Composite build 引用 Molt 根工程 |
+| Plugin ID | `io.github.amsonix.molt` | — |
+| keep | `library/.../res/raw/keep.xml` | 演示跨模块自动发现 |
+| 生效 BuildType | `release` | sample 仅对 release 开启 |
+| Junk Code | `light` + 1 Activity | 演示 Manifest 合并 |
+| 资源 / 改包 | 默认关闭 | 缩短首次构建；生产环境见根目录 README 默认配置 |
 
-完整能力见 [../../README.md](../../README.md)。
+完整接入与 DSL 说明见 [../README.md](../README.md)。
