@@ -4,8 +4,8 @@ import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.artifact.ArtifactTransformationRequest
 import com.android.build.api.variant.Aapt2
 import com.android.build.api.variant.ApplicationVariant
-import com.google.firebase.crashlytics.buildtools.gradle.tasks.UploadMappingFileTask
 import io.github.amsonix.molt.internal.bundle.MoltObfuscateApkListingSeed
+import io.github.amsonix.molt.internal.util.CrashlyticsMappingUploadWiring
 import io.github.amsonix.molt.internal.bundle.VariantSigningConfig
 import io.github.amsonix.molt.internal.util.KeepXmlDiscovery
 import io.github.amsonix.molt.internal.util.MoltObfuscateDefaults
@@ -18,7 +18,6 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.kotlin.dsl.register
-import org.gradle.kotlin.dsl.withType
 import java.io.File
 
 /** variant 级任务注册：资源 overlay、APK/AAB Transform、keep 收集。 */
@@ -91,13 +90,12 @@ internal object MoltObfuscateVariantWiring {
         }.configureEach {
             finalizedBy(mergeTask)
         }
-        project.tasks.withType<UploadMappingFileTask>().configureEach {
-            if (!extension.hookCrashlyticsMappingUpload.get()) return@configureEach
-            if (name == "uploadCrashlyticsMappingFile$capitalized") {
-                dependsOn(mergeTask)
-                mergedMappingFile.set(mergeTask.flatMap { task -> task.outputMapping })
-            }
-        }
+        CrashlyticsMappingUploadWiring.wire(
+            project = project,
+            hookEnabled = extension.hookCrashlyticsMappingUpload.get(),
+            uploadTaskName = "uploadCrashlyticsMappingFile$capitalized",
+            mergeTask = mergeTask,
+        )
         return mergeTask
     }
 

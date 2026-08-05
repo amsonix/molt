@@ -18,21 +18,33 @@
 ./tools/molt-verify.sh
 ```
 
-## 发布 Maven
+## 发布
 
 版本号：`gradle.properties` → `moltVersion`
+
+### Gradle Plugin Portal
+
+```bash
+./gradlew :plugin:publishMoltToGradlePortal \
+  -Pgradle.publish.key=... \
+  -Pgradle.publish.secret=...
+```
+
+需配置 Portal 凭证（建议写入 `~/.gradle/gradle.properties`，勿提交仓库）。
+
+### 内部 Nexus
 
 ```bash
 ./gradlew :plugin:publishMoltObfuscatePlugin
 ```
+
+需配置 `NEXUS_USERNAME` / `NEXUS_PASSWORD`（或写入 `gradle.properties`）。
 
 | 坐标 | 说明 |
 |------|------|
 | `io.github.amsonix.molt:resource-keep:<version>` | keep 库 |
 | `io.github.amsonix.molt:io.github.amsonix.molt.gradle.plugin:<version>` | 插件 marker |
 | `io.github.amsonix.molt:plugin:<version>` | 插件实现 |
-
-需配置 `NEXUS_USERNAME` / `NEXUS_PASSWORD`（或写入 `gradle.properties`）。
 
 ## 宿主工程集成探针
 

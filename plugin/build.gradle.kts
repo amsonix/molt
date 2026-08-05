@@ -4,6 +4,12 @@ plugins {
     `maven-publish`
 }
 
+import groovy.util.Node
+import groovy.util.NodeList
+import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.publish.tasks.GenerateModuleMetadata
+import org.gradle.api.tasks.bundling.Jar
+import org.gradle.plugin.devel.tasks.PluginUnderTestMetadata
 import java.util.Properties
 
 group = "io.github.amsonix.molt"
@@ -29,8 +35,8 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
 
 dependencies {
     implementation(project(":resource-keep"))
-    implementation(libs.android.gradle.plugin)
-    implementation(libs.kotlin.gradle.plugin)
+    compileOnly(libs.android.gradle.plugin)
+    compileOnly(libs.firebase.crashlytics.gradle.plugin)
     implementation("com.google.code.gson:gson:2.13.0")
     implementation("com.android.tools.build:bundletool:1.17.2")
     implementation("com.android.tools.build:aapt2-proto:8.13.2-14304508")
@@ -39,10 +45,27 @@ dependencies {
     implementation("commons-codec:commons-codec:1.16.0")
     implementation("com.google.protobuf:protobuf-java:3.25.5")
     implementation("org.smali:dexlib2:2.5.2")
-    implementation(libs.firebase.crashlytics.gradle.plugin)
     compileOnly("org.jetbrains:annotations:24.1.0")
+    testImplementation(libs.android.gradle.plugin)
+    testImplementation(libs.firebase.crashlytics.gradle.plugin)
     testImplementation(libs.junit)
     testImplementation(gradleTestKit())
+}
+
+val pluginUnderTestCompileOnly by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    extendsFrom(configurations.compileOnly.get())
+}
+
+tasks.withType<PluginUnderTestMetadata>().configureEach {
+    pluginClasspath.from(pluginUnderTestCompileOnly)
+}
+
+tasks.named<Jar>("jar") {
+    dependsOn(":resource-keep:classes")
+    from(project(":resource-keep").sourceSets.main.get().output)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 gradlePlugin {
@@ -92,6 +115,37 @@ publishing {
             }
         }
     }
+    publications.withType<MavenPublication>().configureEach {
+        if (name != "pluginMaven") return@configureEach
+        pom.withXml {
+            val deps = asNode().get("dependencies") as? NodeList ?: return@withXml
+            val depsNode = deps.firstOrNull() as? Node ?: return@withXml
+            depsNode.children()
+                .filterIsInstance<Node>()
+                .filter { dep ->
+                    (dep.get("artifactId") as? NodeList)?.text() == "resource-keep"
+                }
+                .forEach { depsNode.remove(it) }
+        }
+    }
+}
+
+tasks.withType<GenerateModuleMetadata>().configureEach {
+    if (name != "generateMetadataFileForPluginMavenPublication") return@configureEach
+    doLast {
+        val moduleFile = outputFile.asFile.get()
+        @Suppress("UNCHECKED_CAST")
+        val module = groovy.json.JsonSlurper().parseText(moduleFile.readText()) as MutableMap<String, Any>
+        @Suppress("UNCHECKED_CAST")
+        val variants = module["variants"] as? MutableList<MutableMap<String, Any>> ?: return@doLast
+        variants.forEach { variant ->
+            @Suppress("UNCHECKED_CAST")
+            val deps = variant["dependencies"] as? MutableList<MutableMap<String, Any>> ?: return@forEach
+            deps.removeIf { it["module"] == "resource-keep" }
+            if (deps.isEmpty()) variant.remove("dependencies")
+        }
+        moduleFile.writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(module)))
+    }
 }
 
 fun integrationVariant(): String =
@@ -116,6 +170,7 @@ fun hasIntegrationReleaseApk(root: File): Boolean =
 /** 插件模块自定义任务名（非 moltObfuscate* 前缀）也归入 molt 分组。 */
 private val moltPluginTaskNames = setOf(
     "publishMoltObfuscatePlugin",
+    "publishMoltToGradlePortal",
     "quickDexVerify",
     "dexComponentRenameIntegrationTest",
     "dexMappingRewriteApkGeneratorTest",
@@ -127,6 +182,26 @@ tasks.register("publishMoltObfuscatePlugin") {
         project(":resource-keep").tasks.named("publish"),
         tasks.named("publish"),
     )
+}
+
+tasks.register<Exec>("publishMoltToGradlePortal") {
+    description = "Publish Molt plugin to Gradle Plugin Portal (uses gradle/portal-publish.init.gradle)"
+    group = "molt"
+    workingDir = rootProject.projectDir
+    val initScript = rootProject.file("gradle/portal-publish.init.gradle")
+    val publishArgs = mutableListOf(
+        rootProject.projectDir.resolve("gradlew").absolutePath,
+        "-I",
+        initScript.absolutePath,
+        ":plugin:publishPlugins",
+        "--no-daemon",
+    )
+    listOf("gradle.publish.key", "gradle.publish.secret").forEach { propertyName ->
+        providers.gradleProperty(propertyName).orNull?.let { value ->
+            publishArgs += listOf("-P$propertyName=$value")
+        }
+    }
+    commandLine(publishArgs)
 }
 
 tasks.register<JavaExec>("quickDexVerify") {
