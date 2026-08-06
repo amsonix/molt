@@ -15,7 +15,7 @@ abstract class MoltObfuscateExtension @Inject constructor(
     val enabled: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
 
     val enabledBuildTypes: ListProperty<String> = project.objects.listProperty(String::class.java).convention(
-        listOf("alpha", "release"),
+        listOf("release"),
     )
 
     /** 混淆随机种子；默认由 app 的 applicationId hash 推导。 */

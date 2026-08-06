@@ -106,7 +106,7 @@ Daily use usually needs only the blocks below. **All options** (top-level, `reso
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `true` | Master switch |
-| `enabledBuildTypes` | `alpha`, `release` | Apply only to listed build types (`alpha` is **not** built into AGP; define it yourself or override to `listOf("release")`) |
+| `enabledBuildTypes` | `release` | Apply only to listed build types; add custom types (e.g. `alpha`, `debug`) as needed |
 | `seed` | `applicationId.hashCode()` | Obfuscation seed; stable per applicationId |
 | `autoDiscoverKeepXml` | `true` | Scan `res/raw/keep.xml` automatically |
 
@@ -165,8 +165,6 @@ Override summary: [CONFIG.md → variantConfig](docs/CONFIG.md#variantconfig-cre
 
 ```kotlin
 molt {
-    enabledBuildTypes.set(listOf("release"))
-
     junkCode {
         profile.set("medium")
         // No Activities / Manifest by default; enable when needed:
@@ -217,7 +215,7 @@ The plugin merges keep files from the app and library dependencies.
 ## Notes
 
 1. **Release must enable R8** (`isMinifyEnabled = true`). Component / View rename patches DEX post-R8; skipped when minify is off.
-2. **Default build types**: default is `enabledBuildTypes = ["alpha", "release"]`. `alpha` is a custom build type, not an AGP default — use `listOf("release")` if your project has no `alpha`. Add `debug` to enable on debug builds.
+2. **Default build types**: default is `enabledBuildTypes = ["release"]` only. Add `debug`, `alpha`, or other custom build types explicitly when needed.
 3. **Junk** `profile` **≠ Manifest**: `light/medium/heavy` only scales utility classes; Manifest changes need `activityCountPerPackage` + `mergeJunkManifest`.
 4. **Keep before obfuscate**: put ad / Firebase / SDK-critical resources in `keep.xml`; enable `verifyApkKeep` / `verifyBundleKeep` when appropriate.
 5. **AGP version**: 8.13.x recommended; mismatch warns by default, or set `failOnAgpToolchainMismatch = true` to fail the build.

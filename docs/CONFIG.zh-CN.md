@@ -11,7 +11,7 @@
 | 选项 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `enabled` | `Boolean` | `true` | 插件总开关 |
-| `enabledBuildTypes` | `List<String>` | `alpha`, `release` | 仅对列出的 buildType 生效（`alpha` 非 AGP 内置，需工程自行定义） |
+| `enabledBuildTypes` | `List<String>` | `release` | 仅对列出的 buildType 生效；需要时可加入 `debug`、`alpha` 等自定义 buildType |
 | `seed` | `Int` | `applicationId.hashCode()` | 混淆随机种子；同包名保持一致 |
 | `keepXmlFiles` | `FileCollection` | 空 | 额外 keep.xml 文件，与自动发现合并 |
 | `autoDiscoverKeepXml` | `Boolean` | `true` | 自动扫描 app 与 library 的 `res/raw/keep.xml` |

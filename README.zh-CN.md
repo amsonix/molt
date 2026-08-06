@@ -106,7 +106,7 @@ molt {
 | 选项 | 默认值 | 说明 |
 |------|--------|------|
 | `enabled` | `true` | 插件总开关 |
-| `enabledBuildTypes` | `alpha`, `release` | 仅对列出的 buildType 生效（`alpha` 非 AGP 内置，需工程自行定义） |
+| `enabledBuildTypes` | `release` | 仅对列出的 buildType 生效；需要时可加入 `debug`、`alpha` 等自定义 buildType |
 | `seed` | `applicationId.hashCode()` | 混淆随机种子；同包名保持一致 |
 | `autoDiscoverKeepXml` | `true` | 自动扫描 `res/raw/keep.xml` |
 
@@ -165,8 +165,6 @@ variantConfig {
 
 ```kotlin
 molt {
-    enabledBuildTypes.set(listOf("release"))
-
     junkCode {
         profile.set("medium")
         // 默认不生成 Activity、不写 Manifest；需要时再开：
@@ -217,7 +215,7 @@ molt {
 ## 注意事项
 
 1. **Release 必须开启 R8**（`isMinifyEnabled = true`），Component / View 改类名在 R8 完成后 patch DEX，无混淆则跳过。
-2. **默认 buildType**：插件默认 `enabledBuildTypes = ["alpha", "release"]`；`alpha` 不是 AGP 内置 buildType，工程若无 `alpha` 请改为 `listOf("release")`；要对 debug 构建生效需加入 `debug`。
+2. **默认 buildType**：默认仅对 `release` 生效（`enabledBuildTypes`）；要对 `debug` 或自定义 buildType（如 `alpha`）生效需显式加入。
 3. **Junk** `profile` **≠ Manifest**：`light/medium/heavy` 只调 utility 类数量；Manifest 变更需 `activityCountPerPackage` + `mergeJunkManifest`。
 4. **keep 先于混淆**：广告 / Firebase 等 SDK 关键资源写入 `keep.xml`，并视情况开启 `verifyApkKeep` / `verifyBundleKeep`。
 5. **AGP 版本**：建议 8.13.x；不一致时默认 warn，可设 `failOnAgpToolchainMismatch = true` 强制 fail。

@@ -11,7 +11,7 @@ See each table’s “variant override” column and the summary at the end for 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | `Boolean` | `true` | Master switch |
-| `enabledBuildTypes` | `List<String>` | `alpha`, `release` | Apply only to listed build types (`alpha` is not built into AGP; define it in your project or override to `listOf("release")`) |
+| `enabledBuildTypes` | `List<String>` | `release` | Apply only to listed build types; add custom types (e.g. `alpha`, `debug`) as needed |
 | `seed` | `Int` | `applicationId.hashCode()` | Obfuscation seed; stable per applicationId |
 | `keepXmlFiles` | `FileCollection` | empty | Extra keep.xml files merged with auto-discovery |
 | `autoDiscoverKeepXml` | `Boolean` | `true` | Scan app and library `res/raw/keep.xml` |
