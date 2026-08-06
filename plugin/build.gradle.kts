@@ -9,6 +9,7 @@ import groovy.util.NodeList
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.testing.Test
 import org.gradle.plugin.devel.tasks.PluginUnderTestMetadata
 import java.util.Properties
 
@@ -30,7 +31,90 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     maxHeapSize = "2g"
-    dependsOn("compileKotlin")
+    dependsOn("compileKotlin", "pluginUnderTestMetadata")
+    doFirst {
+        val metadata = layout.buildDirectory
+            .file("pluginUnderTestMetadata/plugin-under-test-metadata.properties")
+            .get().asFile
+        check(metadata.isFile) {
+            "Missing $metadata — pluginUnderTestMetadata must run before TestKit probes"
+        }
+        val props = Properties().apply { metadata.inputStream().use { load(it) } }
+        val agpVersion = providers.gradleProperty("testAgp").orElse("8.13.2").get()
+        systemProperty("MOLT_TEST_AGP", agpVersion)
+        systemProperty("MOLT_TEST_GRADLE", providers.gradleProperty("testGradle").orElse("8.13").get())
+        systemProperty(
+            "MOLT_PLUGIN_CLASSPATH",
+            probePluginClasspath(
+                moltClasspath = filterPluginUnderTestClasspath(props),
+                agpVersion = agpVersion,
+            ),
+        )
+        systemProperty("MOLT_REPO_ROOT", rootProject.projectDir.absolutePath)
+        providers.environmentVariable("MOLT_PROBE_JAVA_HOME").orNull
+            ?.takeIf { it.isNotBlank() }
+            ?.let { javaHome -> systemProperty("MOLT_PROBE_JAVA_HOME", javaHome) }
+        providers.gradleProperty("moltFeature").orNull?.let { featureId ->
+            systemProperty("MOLT_FEATURE_PROBE", featureId)
+        }
+        if (providers.environmentVariable("MOLT_PROBE_CHINA_MIRROR").orNull != "0") {
+            systemProperty("MOLT_PROBE_CHINA_MIRROR", "1")
+        }
+    }
+}
+
+fun isHostGradleToolchainJar(path: String): Boolean {
+    val normalized = path.replace('\\', '/')
+    if (normalized.contains("generated-gradle-jars")) return true
+    if (Regex("""/\.gradle/(caches|wrapper/dists)/8\.1[3-9]/""").containsMatchIn(normalized)) return true
+    if (Regex("""/gradle-8\.1[3-9]-""").containsMatchIn(normalized)) return true
+    val name = File(path).name
+    return name.startsWith("gradle-api-") ||
+        name.startsWith("gradle-kotlin-dsl-") ||
+        name.startsWith("gradle-installation-beacon-") ||
+        name.startsWith("gradle-worker-services-") ||
+        name.startsWith("gradle-runtime-api-info-")
+}
+
+/** 宿主 AGP 8.13 的 aapt2-proto 为 Java 21；Gradle 8.0–8.4 TestKit 无法加载，改由 probe AGP 传递依赖提供。 */
+fun isHostPinnedAapt2Proto(path: String): Boolean =
+    path.replace('\\', '/').contains("aapt2-proto")
+
+fun filterPluginUnderTestClasspath(props: Properties): String =
+    props.getProperty("implementation-classpath")
+        .split(File.pathSeparatorChar)
+        .filter { path ->
+            path.isNotBlank() &&
+                !path.contains("${File.separator}com.android.tools.build${File.separator}gradle${File.separator}") &&
+                !path.contains("firebase-crashlytics-gradle") &&
+                !isHostGradleToolchainJar(path) &&
+                !isHostPinnedAapt2Proto(path)
+        }
+        .joinToString(File.pathSeparator)
+
+/** Molt jar + runtime deps + AGP version under probe (must match -PtestAgp for TestKit to load AppExtension). */
+fun probePluginClasspath(moltClasspath: String, agpVersion: String): String {
+    val agpArtifacts = configurations.detachedConfiguration(
+        dependencies.create("com.android.tools.build:gradle:$agpVersion"),
+    ).apply { isTransitive = true }.resolve().map { it.absolutePath }
+    return (moltClasspath.split(File.pathSeparatorChar).filter { it.isNotBlank() } + agpArtifacts)
+        .distinct()
+        .joinToString(File.pathSeparator)
+}
+
+tasks.withType<PluginUnderTestMetadata>().configureEach {
+    // Jar + runtime only — never compileOnly AGP (would break multi-AGP matrix probes).
+    pluginClasspath.setFrom(
+        tasks.named<Jar>("jar").flatMap { it.archiveFile },
+        configurations.runtimeClasspath,
+    )
+    doLast {
+        val propsFile = outputDirectory.file("plugin-under-test-metadata.properties").get().asFile
+        val props = Properties().apply { propsFile.inputStream().use { load(it) } }
+        val filtered = filterPluginUnderTestClasspath(props)
+        props.setProperty("implementation-classpath", filtered)
+        propsFile.outputStream().use { props.store(it, "molt plugin under test — AGP added per probe row") }
+    }
 }
 
 dependencies {
@@ -39,7 +123,9 @@ dependencies {
     compileOnly(libs.firebase.crashlytics.gradle.plugin)
     implementation("com.google.code.gson:gson:2.13.0")
     implementation("com.android.tools.build:bundletool:1.17.2")
-    implementation("com.android.tools.build:aapt2-proto:8.13.2-14304508")
+    // compileOnly：避免 Java 21 的 8.13 proto 进入发布 classpath（Gradle 8.0 / AGP 8.0 宿主无法加载）。
+    // 运行时由宿主 AGP 传递依赖提供；bundle/apk transform 需 AGP ≥ 8.0.2。
+    compileOnly("com.android.tools.build:aapt2-proto:8.13.2-14304508")
     implementation("com.google.guava:guava:32.1.3-jre")
     implementation("commons-io:commons-io:2.15.1")
     implementation("commons-codec:commons-codec:1.16.0")
@@ -52,15 +138,8 @@ dependencies {
     testImplementation(gradleTestKit())
 }
 
-val pluginUnderTestCompileOnly by configurations.creating {
-    isCanBeConsumed = false
-    isCanBeResolved = true
-    extendsFrom(configurations.compileOnly.get())
-}
-
-tasks.withType<PluginUnderTestMetadata>().configureEach {
-    pluginClasspath.from(pluginUnderTestCompileOnly)
-}
+// TestKit pluginClasspath = molt jar + runtime deps + matching AGP (-PtestAgp).
+// Strip host Gradle 8.13 API jars so Gradle 8.0–8.2 TestKit can instrument the classpath.
 
 tasks.named<Jar>("jar") {
     dependsOn(":resource-keep:classes")
@@ -174,7 +253,154 @@ private val moltPluginTaskNames = setOf(
     "quickDexVerify",
     "dexComponentRenameIntegrationTest",
     "dexMappingRewriteApkGeneratorTest",
+    "moltObfuscateAgpCompatTest",
+    "moltObfuscateAgpCompatE2eTest",
+    "moltObfuscateAgpCompatBundleE2eTest",
+    "moltObfuscateAgpCompatRenameApkE2eTest",
+    "moltObfuscateAgpCompatRenameAabE2eTest",
+    "moltObfuscateAgpCompatMatrix",
+    "moltObfuscateFeatureProbeTest",
+    "moltObfuscateFeatureProbeMatrix",
+    "moltObfuscateFeatureProbeNightly",
 )
+
+fun registerAgpCompatTest(
+    name: String,
+    description: String,
+    testMethod: String,
+    requireE2e: Boolean = false,
+) {
+    tasks.register<Test>(name) {
+        this.description = description
+        group = "molt"
+        dependsOn("testClasses", "pluginUnderTestMetadata")
+        testClassesDirs = sourceSets.test.get().output.classesDirs
+        classpath = sourceSets.test.get().runtimeClasspath
+        filter.includeTestsMatching("io.github.amsonix.molt.AgpCompatibilityTest.$testMethod")
+        doFirst {
+            if (requireE2e) {
+                systemProperty("RUN_SHELL_TRANSFORM_E2E", "1")
+            }
+        }
+    }
+}
+
+registerAgpCompatTest(
+    name = "moltObfuscateAgpCompatTest",
+    description = "AGP matrix smoke: molt prepare/resources/junk (-PtestAgp -PtestGradle)",
+    testMethod = "smoke_moltTasksRunAgainstConfiguredAgp",
+)
+
+registerAgpCompatTest(
+    name = "moltObfuscateAgpCompatE2eTest",
+    description = "AGP probe E2E: assemble + APK transform (-PtestAgp -PtestGradle)",
+    testMethod = "smoke_assembleReleaseApkTransformAgainstConfiguredAgp",
+    requireE2e = true,
+)
+
+registerAgpCompatTest(
+    name = "moltObfuscateAgpCompatBundleE2eTest",
+    description = "AGP probe E2E: bundle + AAB transform (-PtestAgp -PtestGradle)",
+    testMethod = "smoke_bundleReleaseAabTransformAgainstConfiguredAgp",
+    requireE2e = true,
+)
+
+registerAgpCompatTest(
+    name = "moltObfuscateAgpCompatRenameApkE2eTest",
+    description = "AGP probe E2E: assemble + APK transform with rename (-PtestAgp -PtestGradle)",
+    testMethod = "smoke_assembleReleaseApkTransformWithRenameAgainstConfiguredAgp",
+    requireE2e = true,
+)
+
+registerAgpCompatTest(
+    name = "moltObfuscateAgpCompatRenameAabE2eTest",
+    description = "AGP probe E2E: bundle + AAB transform with rename (-PtestAgp -PtestGradle)",
+    testMethod = "smoke_bundleReleaseAabTransformWithRenameAgainstConfiguredAgp",
+    requireE2e = true,
+)
+
+tasks.register<Exec>("moltObfuscateAgpCompatMatrix") {
+    description = "Probe AGP support range (tools/agp-compat.sh → build/reports/agp-compat/report.md)"
+    group = "molt"
+    workingDir = rootProject.projectDir
+    commandLine(rootProject.projectDir.resolve("tools/agp-compat.sh").absolutePath)
+}
+
+fun registerFeatureProbeTest(
+    name: String,
+    description: String,
+    featureId: String,
+) {
+    tasks.register<Test>(name) {
+        this.description = description
+        group = "molt"
+        dependsOn("testClasses", "pluginUnderTestMetadata")
+        testClassesDirs = sourceSets.test.get().output.classesDirs
+        classpath = sourceSets.test.get().runtimeClasspath
+        filter.includeTestsMatching("io.github.amsonix.molt.FeatureProbeTest.featureProbeRunsConfiguredRow")
+        doFirst {
+            systemProperty("MOLT_FEATURE_PROBE", featureId)
+            systemProperty("MOLT_TEST_AGP", providers.gradleProperty("testAgp").orElse("8.13.2").get())
+            systemProperty("MOLT_TEST_GRADLE", providers.gradleProperty("testGradle").orElse("8.13").get())
+            systemProperty("RUN_SHELL_TRANSFORM_E2E", "1")
+        }
+    }
+}
+
+tasks.register<Test>("moltObfuscateFeatureProbeTest") {
+    description = "Feature matrix probe (-PmoltFeature=F01-overlay-rename -PtestAgp -PtestGradle)"
+    group = "molt"
+    dependsOn("testClasses", "pluginUnderTestMetadata")
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("io.github.amsonix.molt.FeatureProbeTest.featureProbeRunsConfiguredRow")
+    doFirst {
+        val feature = providers.gradleProperty("moltFeature")
+            .orElse(providers.environmentVariable("MOLT_FEATURE_PROBE"))
+            .orNull
+            ?: error("Set -PmoltFeature=<feature_id> or MOLT_FEATURE_PROBE")
+        systemProperty("MOLT_FEATURE_PROBE", feature)
+        systemProperty("MOLT_TEST_AGP", providers.gradleProperty("testAgp").orElse("8.13.2").get())
+        systemProperty("MOLT_TEST_GRADLE", providers.gradleProperty("testGradle").orElse("8.13").get())
+        systemProperty("RUN_SHELL_TRANSFORM_E2E", "1")
+    }
+}
+
+registerFeatureProbeTest(
+    name = "moltObfuscateTransformE2eTest",
+    description = "Alias → feature probe F05-arsc-apk (APK transform E2E)",
+    featureId = "F05-arsc-apk",
+)
+
+registerFeatureProbeTest(
+    name = "moltObfuscateTransformBundleE2eTest",
+    description = "Alias → feature probe F06-arsc-aab (AAB transform E2E)",
+    featureId = "F06-arsc-aab",
+)
+
+registerFeatureProbeTest(
+    name = "moltObfuscateTransformRenameE2eTest",
+    description = "Alias → feature probe F09-rename-apk (APK transform + rename E2E)",
+    featureId = "F09-rename-apk",
+)
+
+tasks.register<Exec>("moltObfuscateFeatureProbeMatrix") {
+    description = "Probe molt feature presets (tools/feature-probe.sh → build/reports/feature-probe/report.md)"
+    group = "molt"
+    workingDir = rootProject.projectDir
+    commandLine(rootProject.projectDir.resolve("tools/feature-probe.sh").absolutePath)
+    environment(
+        "FEATURE_PROBE_TIER" to providers.gradleProperty("featureProbeTier").orElse("all").get(),
+    )
+}
+
+tasks.register<Exec>("moltObfuscateFeatureProbeNightly") {
+    description = "Feature probe nightly tier (tools/feature-probe.sh FEATURE_PROBE_TIER=nightly)"
+    group = "molt"
+    workingDir = rootProject.projectDir
+    commandLine(rootProject.projectDir.resolve("tools/feature-probe.sh").absolutePath)
+    environment("FEATURE_PROBE_TIER" to "nightly")
+}
 
 tasks.register("publishMoltObfuscatePlugin") {
     description = "Publish resource-keep + Molt plugin to Nexus"
@@ -245,28 +471,6 @@ tasks.register<Test>("dexComponentRenameIntegrationTest") {
     }
 }
 
-tasks.register<Test>("moltObfuscateTransformE2eTest") {
-    description = "TestKit APK Transform E2E (requires Android SDK; skips when SDK missing)"
-    dependsOn("testClasses")
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
-    filter.includeTestsMatching(
-        "io.github.amsonix.molt.MoltObfuscatePluginFunctionalTest.assembleRelease_runsApkTransformWhenEnabled",
-    )
-    systemProperty("RUN_SHELL_TRANSFORM_E2E", "1")
-}
-
-tasks.register<Test>("moltObfuscateTransformBundleE2eTest") {
-    description = "TestKit AAB Transform E2E (requires Android SDK; skips when SDK missing)"
-    dependsOn("testClasses")
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
-    filter.includeTestsMatching(
-        "io.github.amsonix.molt.MoltObfuscatePluginFunctionalTest.bundleRelease_runsAabTransformWhenEnabled",
-    )
-    systemProperty("RUN_SHELL_TRANSFORM_E2E", "1")
-}
-
 tasks.register<JavaExec>("moltObfuscateApkSpotCheck") {
     description = "Spot-check Firebase/ad SDK keep resources in a built APK (-PspotCheckApk=...)"
     dependsOn("testClasses")
@@ -277,17 +481,6 @@ tasks.register<JavaExec>("moltObfuscateApkSpotCheck") {
         require(apkPath.isPresent) { "Set -PspotCheckApk=/path/to/app.apk" }
     }
     args(apkPath)
-}
-
-tasks.register<Test>("moltObfuscateTransformRenameE2eTest") {
-    description = "TestKit APK Transform E2E with component/view rename enabled"
-    dependsOn("testClasses")
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
-    filter.includeTestsMatching(
-        "io.github.amsonix.molt.MoltObfuscatePluginFunctionalTest.assembleRelease_runsApkTransformWithRenameWhenEnabled",
-    )
-    systemProperty("RUN_SHELL_TRANSFORM_E2E", "1")
 }
 
 tasks.register<Test>("dexMappingRewriteApkGeneratorTest") {
@@ -384,12 +577,10 @@ tasks.register("moltObfuscateMappingParityCheckNightly") {
 }
 
 tasks.register("moltObfuscateNightlyVerify") {
-    description = "Nightly: unit tests + E2E + sample (+ optional host DEX/parity)"
+    description = "Nightly: unit tests + feature probe nightly + sample (+ optional host DEX/parity)"
     dependsOn(
         "test",
-        "moltObfuscateTransformE2eTest",
-        "moltObfuscateTransformRenameE2eTest",
-        "moltObfuscateTransformBundleE2eTest",
+        "moltObfuscateFeatureProbeNightly",
         "moltObfuscateSampleAssemble",
         "moltObfuscateNightlyDexIntegration",
     )

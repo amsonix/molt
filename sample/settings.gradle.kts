@@ -1,6 +1,7 @@
+// AGP 8.13.x 使用 Gradle 8.13 wrapper；molt 插件从 mavenLocal 解析（需先在仓库根目录执行 :plugin:publishToMavenLocal）。
 pluginManagement {
-    includeBuild("..")
     repositories {
+        mavenLocal()
         google()
         mavenCentral()
         gradlePluginPortal()

@@ -24,6 +24,8 @@
 | `failOnMissingBundleKeep` | `Boolean` | `true` | `verifyBundleKeep` 发现缺失时 fail build |
 | `useFirebaseArtifactVerifyBaseline` | `Boolean` | `false` | 启用 Firebase/google-services 内置验包 baseline |
 | `hookCrashlyticsMappingUpload` | `Boolean` | `true` | hook Crashlytics 上传任务读取合成 mapping |
+| `failOnCrashlyticsHookFailure` | `Boolean` | `false` | Crashlytics upload 接线失败时 fail build |
+| `failOnReleaseMinifyDisabled` | `Boolean` | `false` | post-R8 能力开启但 `minifyEnabled=false` 时 fail build |
 | `failOnEmptyArtifactVerifyBaseline` | `Boolean` | `true` | 验包开启但 baseline 为空时 fail build |
 | `failOnMissingShrinkKeepTask` | `Boolean` | `true` | `mergeShrinkKeepXml` 开启但任务不存在时 fail |
 | `failOnJunkManifestMergeFailure` | `Boolean` | `true` | Junk Manifest 合并失败时 fail build |

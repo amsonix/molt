@@ -8,8 +8,8 @@
 |----|-----|
 | Plugin ID | `io.github.amsonix.molt` |
 | 扩展块 | `molt { }` |
-| 当前版本 | `1.0.0` |
-| 要求 | AGP 8.13.x · JDK 17+ · Release 开启 `isMinifyEnabled` |
+| 当前版本 | `1.1.0` |
+| 要求 | AGP **8.0.2 – 9.3.x**（探测矩阵）· [探测报告](docs/COMPATIBILITY.zh-CN.md) |
 
 ## 它能做什么
 
@@ -57,7 +57,7 @@ pluginManagement {
 }
 
 plugins {
-    id("io.github.amsonix.molt") version "1.0.0" apply false
+    id("io.github.amsonix.molt") version "1.1.0" apply false
 }
 ```
 
@@ -212,6 +212,21 @@ molt {
 
 插件会自动合并 app 与依赖 library 中的 keep 文件。
 
+## 产物路径
+
+默认输出根目录：`<rootProject>/build/shell-obfuscate/<variant>/`（不在 `app/build` 下）。
+
+| 路径 | 说明 |
+|------|------|
+| `build/shell-obfuscate/<variant>/component-mapping.json` | Component 改类名 mapping |
+| `build/shell-obfuscate/<variant>/view-mapping.json` | View 改类名 mapping |
+| `build/shell-obfuscate/<variant>/apk-resource/resources-mapping.txt` | APK 资源表混淆 mapping |
+| `build/shell-obfuscate/<variant>/bundle-resource/resources-mapping.txt` | AAB 资源表混淆 mapping |
+| `app/build/outputs/mapping/<variant>/shell-obfuscate-mapping.txt` | **合成 mapping**（R8 + 改类名）；Crashlytics 上传目标 |
+| `app/build/shell-obfuscate/molt-junk-keep.pro` | Junk 类自动 ProGuard keep |
+
+执行 `./gradlew :app:moltPrintVariantPlan` 可打印各 variant 开关与路径。
+
 ## 注意事项
 
 1. **Release 必须开启 R8**（`isMinifyEnabled = true`），Component / View 改类名在 R8 完成后 patch DEX，无混淆则跳过。
@@ -219,6 +234,19 @@ molt {
 3. **Junk** `profile` **≠ Manifest**：`light/medium/heavy` 只调 utility 类数量；Manifest 变更需 `activityCountPerPackage` + `mergeJunkManifest`。
 4. **keep 先于混淆**：广告 / Firebase 等 SDK 关键资源写入 `keep.xml`，并视情况开启 `verifyApkKeep` / `verifyBundleKeep`。
 5. **AGP 版本**：建议 8.13.x；不一致时默认 warn，可设 `failOnAgpToolchainMismatch = true` 强制 fail。
+6. **Crashlytics 接线**：生产环境可设 `failOnCrashlyticsHookFailure = true`，避免 upload 接线失败仅 warn。
+7. **Configuration Cache**：兼容 Gradle Configuration Cache；可在 `gradle.properties` 开启 `org.gradle.configuration-cache=true`（见 [COMPATIBILITY.zh-CN.md](docs/COMPATIBILITY.zh-CN.md)）。
+
+## 升级 AGP
+
+项目升级 AGP / Gradle 时建议：
+
+1. 在 molt 仓库跑 `./tools/agp-compat.sh`（或 CI 矩阵）验证目标 AGP。
+2. 跑 `FEATURE_PROBE_TIER=gate ./tools/feature-probe.sh` 做功能回归。
+3. 临时设 `molt { failOnAgpToolchainMismatch.set(true) }` 捕获 aapt2-proto / bundletool pin 漂移。
+4. 重编 release APK/AAB，核对 `shell-obfuscate-mapping.txt` 与 Crashlytics 接线（`moltPrintVariantPlan`）。
+
+详见 [docs/COMPATIBILITY.zh-CN.md](docs/COMPATIBILITY.zh-CN.md)。
 
 ## 示例工程
 

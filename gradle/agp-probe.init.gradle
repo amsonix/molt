@@ -1,0 +1,17 @@
+// TestKit AGP probe: optional init script (TLS / mirror tuning).
+// Enabled via AgpTestFixture when this file exists in the molt repo.
+
+System.setProperty('https.protocols', 'TLSv1.2,TLSv1.3')
+System.setProperty('jdk.tls.client.protocols', 'TLSv1.2,TLSv1.3')
+
+settingsEvaluated { settings ->
+    def extraMirror = System.getenv('MOLT_PROBE_MAVEN_MIRROR')
+    if (extraMirror) {
+        settings.pluginManagement.repositories { repos ->
+            repos.maven {
+                name = 'MoltProbeMirror'
+                url = uri(extraMirror)
+            }
+        }
+    }
+}

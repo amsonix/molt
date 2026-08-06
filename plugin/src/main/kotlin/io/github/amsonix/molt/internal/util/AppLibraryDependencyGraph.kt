@@ -13,8 +13,35 @@ internal object AppLibraryDependencyGraph {
                 collectFromConfiguration(appProject, configName, variantName, result)
             }
         }
+        collectFromProjectDependencies(appProject, result)
         return result
     }
+
+    /** variant classpath 配置可能尚未创建；回退扫描 implementation/api 上的 ProjectDependency。 */
+    private fun collectFromProjectDependencies(
+        appProject: Project,
+        result: MutableSet<Project>,
+    ) {
+        val pending = ArrayDeque<Project>()
+        pending.add(appProject)
+        while (pending.isNotEmpty()) {
+            val project = pending.removeFirst()
+            projectDependencyConfigurationNames.forEach { configName ->
+                val config = project.configurations.findByName(configName) ?: return@forEach
+                config.allDependencies.withType(ProjectDependency::class.java).forEach { dependency ->
+                    val dependencyPath = ProjectDependencyCompat.pathOf(dependency)
+                    appProject.evaluationDependsOn(dependencyPath)
+                    val dependencyProject = project.project(dependencyPath)
+                    if (dependencyProject.plugins.hasPlugin("com.android.library") && result.add(dependencyProject)) {
+                        pending.add(dependencyProject)
+                    }
+                }
+            }
+        }
+    }
+
+    private val projectDependencyConfigurationNames =
+        listOf("implementation", "api", "compileOnly", "runtimeOnly")
 
     internal fun classpathConfigurationNames(variantName: String): List<String> =
         listOf("${variantName}RuntimeClasspath", "${variantName}CompileClasspath")
@@ -27,8 +54,9 @@ internal object AppLibraryDependencyGraph {
     ) {
         val config = root.configurations.findByName(configurationName) ?: return
         config.allDependencies.withType(ProjectDependency::class.java).forEach { dependency ->
-            root.evaluationDependsOn(dependency.path)
-            visitProject(root, root.project(dependency.path), appVariantName, result)
+            val dependencyPath = ProjectDependencyCompat.pathOf(dependency)
+            root.evaluationDependsOn(dependencyPath)
+            visitProject(root, root.project(dependencyPath), appVariantName, result)
         }
     }
 
@@ -49,8 +77,9 @@ internal object AppLibraryDependencyGraph {
                 appVariantName.endsWith(variantName, ignoreCase = true)
         }.forEach { configuration ->
             configuration.allDependencies.withType(ProjectDependency::class.java).forEach { dependency ->
-                appProject.evaluationDependsOn(dependency.path)
-                visitProject(appProject, project.project(dependency.path), appVariantName, result)
+                val dependencyPath = ProjectDependencyCompat.pathOf(dependency)
+                appProject.evaluationDependsOn(dependencyPath)
+                visitProject(appProject, project.project(dependencyPath), appVariantName, result)
             }
         }
     }

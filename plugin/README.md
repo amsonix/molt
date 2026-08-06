@@ -5,22 +5,31 @@
 ## 开发命令
 
 ```bash
-# 单元测试
+# 单元测试（PR gate）
 ./gradlew :plugin:moltObfuscateCheck
 
-# TestKit E2E（需 Android SDK）
-./gradlew :plugin:moltObfuscateTransformE2eTest
+# Feature probe gate（5 行）
+FEATURE_PROBE_TIER=gate ./tools/feature-probe.sh
 
-# 构建 sample 工程
-./gradlew :plugin:moltObfuscateSampleAssemble
+# AGP 兼容矩阵（18 版本 × 5 探针 = 90/90，本地约 1–2h）
+./tools/agp-compat.sh
+# 报告 → build/reports/agp-compat/report.md
+
+# Feature probe 全矩阵
+./tools/feature-probe.sh
 
 # nightly 验证套件
 ./tools/molt-verify.sh
+
+# 构建 sample 工程
+./gradlew :plugin:moltObfuscateSampleAssemble
 ```
+
+详见 [docs/COMPATIBILITY.md](../docs/COMPATIBILITY.md)、[docs/FEATURE_PROBE.md](../docs/FEATURE_PROBE.md)。
 
 ## 发布
 
-版本号：`gradle.properties` → `moltVersion`
+版本号：`gradle.properties` → `moltVersion`（当前 **1.1.0**）
 
 ### Gradle Plugin Portal
 
@@ -59,11 +68,14 @@ RUN_MAPPING_PARITY=1 ./tools/molt-verify.sh
 
 ## Gradle 任务
 
-以 app 模块 `googleRelease` variant 为例，任务会自动挂接到 `assemble` / `bundle` 流程：
+### App 模块（接入方）
+
+以 `googleRelease` variant 为例，任务会自动挂接到 `assemble` / `bundle` 流程：
 
 | 任务 | 作用 |
 |------|------|
-| `moltObfuscatePrepareMappingGoogleRelease` | 准备 mapping 输入 |
+| `moltPrintVariantPlan` | 诊断：打印各 variant 开关与任务/产物路径 |
+| `moltObfuscatePrepareMappingGoogleRelease` | 准备 component/view 改类名 mapping |
 | `moltObfuscateResourcesGoogleRelease` | 编译期资源 overlay |
 | `moltObfuscateJunkCodeGoogleRelease` | 生成 junk 源码 |
 | `moltObfuscateTransformApkGoogleRelease` | APK 产物变换 |
@@ -71,7 +83,16 @@ RUN_MAPPING_PARITY=1 ./tools/molt-verify.sh
 | `moltObfuscateMergeMappingGoogleRelease` | 合成最终 mapping |
 | `moltObfuscateGenerateJunkKeep` | 生成 junk 对应 ProGuard keep |
 
-插件模块验证任务：`:plugin:moltObfuscateCheck`、`:plugin:moltObfuscateNightlyVerify` 等。
+### 插件模块验证
+
+| 任务 | 作用 |
+|------|------|
+| `moltObfuscateCheck` | 单元测试（PR gate） |
+| `moltObfuscateAgpCompatTest` | 单档 AGP smoke（`-PtestAgp` / `-PtestGradle`） |
+| `moltObfuscateAgpCompatMatrix` | 全 AGP 矩阵脚本 |
+| `moltObfuscateFeatureProbeTest` | 单档 feature probe（`-PmoltFeature=`） |
+| `moltObfuscateFeatureProbeMatrix` | 全 feature 矩阵脚本 |
+| `moltObfuscateNightlyVerify` | nightly 聚合 |
 
 <details>
 <summary>从 shell-obfuscate 迁移的任务名对照</summary>

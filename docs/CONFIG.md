@@ -24,6 +24,8 @@ See each table’s “variant override” column and the summary at the end for 
 | `failOnMissingBundleKeep` | `Boolean` | `true` | Fail build when `verifyBundleKeep` finds missing resources |
 | `useFirebaseArtifactVerifyBaseline` | `Boolean` | `false` | Use Firebase/google-services artifact verify baseline |
 | `hookCrashlyticsMappingUpload` | `Boolean` | `true` | Hook Crashlytics upload to use merged mapping |
+| `failOnCrashlyticsHookFailure` | `Boolean` | `false` | Fail when Crashlytics upload hook fails |
+| `failOnReleaseMinifyDisabled` | `Boolean` | `false` | Fail when post-R8 features enabled but `minifyEnabled=false` |
 | `failOnEmptyArtifactVerifyBaseline` | `Boolean` | `true` | Fail when verify enabled but baseline is empty |
 | `failOnMissingShrinkKeepTask` | `Boolean` | `true` | Fail when `mergeShrinkKeepXml` enabled but task missing |
 | `failOnJunkManifestMergeFailure` | `Boolean` | `true` | Fail when junk Manifest merge fails |

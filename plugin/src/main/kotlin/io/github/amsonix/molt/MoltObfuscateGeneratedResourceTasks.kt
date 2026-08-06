@@ -238,6 +238,10 @@ abstract class MoltObfuscateResourcesTask : DefaultTask() {
 
     @TaskAction
     fun obfuscate() {
+        val inputDirs = inputResDirs.files.filter { it.isDirectory }
+        require(inputDirs.isNotEmpty()) {
+            "molt: no res source directories for variant ${variantName.get()} (inputResDirs=${inputResDirs.files})"
+        }
         val keepRules = KeepXmlParser.mergeKeepXmlFiles(keepXmlFiles.files)
         val metadataScope = "${applicationId.get()}/${variantName.get()}"
         val config = ResourceObfuscator.Config(
@@ -257,7 +261,7 @@ abstract class MoltObfuscateResourcesTask : DefaultTask() {
         val outRoot = outputDirectory.get().asFile
         val overlayCache = overlayCacheDirectory.get().asFile.takeIf { incrementalOverlay.get() }
         val result = ResourceObfuscator.obfuscateResTrees(
-            inputResDirs = inputResDirs.files,
+            inputResDirs = inputDirs,
             outputResDir = outRoot,
             keepRules = keepRules,
             config = config,
