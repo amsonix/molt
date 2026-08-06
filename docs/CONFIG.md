@@ -1,135 +1,137 @@
-# Molt 配置参考
+# Molt configuration reference
 
-[`molt { }`](../README.md#常用配置) 扩展块**全部**公开配置项。日常接入只需 README 中的常用子块；验包、`failOn*`、图片 overlay 细项等在此查阅。
+Chinese: [CONFIG.zh-CN.md](CONFIG.zh-CN.md)
 
-未列出的 `variantConfig` 可覆盖项见各表「variant 可覆盖」列及文末汇总表。
+All public options for the [`molt { }`](../README.md#common-configuration) extension. For day-to-day use, see the common blocks in the README; use this file for verification, `failOn*`, and image overlay details.
 
-## 顶层
+See each table’s “variant override” column and the summary at the end for `variantConfig` overrides.
 
-| 选项 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `enabled` | `Boolean` | `true` | 插件总开关 |
-| `enabledBuildTypes` | `List<String>` | `alpha`, `release` | 仅对列出的 buildType 生效 |
-| `seed` | `Int` | `applicationId.hashCode()` | 混淆随机种子；同包名保持一致 |
-| `keepXmlFiles` | `FileCollection` | 空 | 额外 keep.xml 文件，与自动发现合并 |
-| `autoDiscoverKeepXml` | `Boolean` | `true` | 自动扫描 app 与 library 的 `res/raw/keep.xml` |
-| `mergeShrinkKeepXml` | `Boolean` | `false` | 合并外部 shrink-resources 插件产出的 keep |
-| `shrinkKeepRelativePath` | `String` | `generated/shrink-resources/{variant}/res/raw/keep.xml` | shrink keep 路径模板 |
-| `shrinkKeepGenerateTaskName` | `String` | `generateShrinkKeepXml{Variant}` | shrink keep 生成任务名模板 |
-| `verifyApkKeep` | `Boolean` | `false` | APK 构建后校验 keep 资源未被混淆 |
-| `failOnMissingApkKeep` | `Boolean` | `true` | `verifyApkKeep` 发现缺失时 fail build |
-| `verifyBundleKeep` | `Boolean` | `false` | AAB 构建后校验 keep 资源未被混淆 |
-| `failOnMissingBundleKeep` | `Boolean` | `true` | `verifyBundleKeep` 发现缺失时 fail build |
-| `useFirebaseArtifactVerifyBaseline` | `Boolean` | `false` | 启用 Firebase/google-services 内置验包 baseline |
-| `hookCrashlyticsMappingUpload` | `Boolean` | `true` | hook Crashlytics 上传任务读取合成 mapping |
-| `failOnEmptyArtifactVerifyBaseline` | `Boolean` | `true` | 验包开启但 baseline 为空时 fail build |
-| `failOnMissingShrinkKeepTask` | `Boolean` | `true` | `mergeShrinkKeepXml` 开启但任务不存在时 fail |
-| `failOnJunkManifestMergeFailure` | `Boolean` | `true` | Junk Manifest 合并失败时 fail build |
-| `allowUnsignedOutput` | `Boolean` | `false` | 允许输出未签名包（仅本地调试） |
-| `failOnAgpToolchainMismatch` | `Boolean` | `false` | AGP 与插件 pin 版本不一致时 fail build |
-| `axmlStrictMode` | `Boolean` | `false` | binary layout 无法改 View 类名时 fail build |
-| `projectPackagePrefixes` | `List<String>` | 由 `applicationId` 推导 | DEX 伴生类识别的工程包前缀 |
-| `syncBaselineProfile` | `Boolean` | `true` | 按合成 mapping 重编 baseline profile |
-| `failOnBaselineProfileSyncFailure` | `Boolean` | `true` | profile 重编失败时 fail build |
-| `baselineProfileHumanReadable` | `File` | variant 默认路径 | 覆盖 `baseline-prof.txt` 输入 |
+## Top-level
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | `Boolean` | `true` | Master switch |
+| `enabledBuildTypes` | `List<String>` | `alpha`, `release` | Apply only to listed build types (`alpha` is not built into AGP; define it in your project or override to `listOf("release")`) |
+| `seed` | `Int` | `applicationId.hashCode()` | Obfuscation seed; stable per applicationId |
+| `keepXmlFiles` | `FileCollection` | empty | Extra keep.xml files merged with auto-discovery |
+| `autoDiscoverKeepXml` | `Boolean` | `true` | Scan app and library `res/raw/keep.xml` |
+| `mergeShrinkKeepXml` | `Boolean` | `false` | Merge keep from external shrink-resources plugin |
+| `shrinkKeepRelativePath` | `String` | `generated/shrink-resources/{variant}/res/raw/keep.xml` | Shrink keep path template |
+| `shrinkKeepGenerateTaskName` | `String` | `generateShrinkKeepXml{Variant}` | Shrink keep task name template |
+| `verifyApkKeep` | `Boolean` | `false` | Verify kept resources after APK build |
+| `failOnMissingApkKeep` | `Boolean` | `true` | Fail build when `verifyApkKeep` finds missing resources |
+| `verifyBundleKeep` | `Boolean` | `false` | Verify kept resources after AAB build |
+| `failOnMissingBundleKeep` | `Boolean` | `true` | Fail build when `verifyBundleKeep` finds missing resources |
+| `useFirebaseArtifactVerifyBaseline` | `Boolean` | `false` | Use Firebase/google-services artifact verify baseline |
+| `hookCrashlyticsMappingUpload` | `Boolean` | `true` | Hook Crashlytics upload to use merged mapping |
+| `failOnEmptyArtifactVerifyBaseline` | `Boolean` | `true` | Fail when verify enabled but baseline is empty |
+| `failOnMissingShrinkKeepTask` | `Boolean` | `true` | Fail when `mergeShrinkKeepXml` enabled but task missing |
+| `failOnJunkManifestMergeFailure` | `Boolean` | `true` | Fail when junk Manifest merge fails |
+| `allowUnsignedOutput` | `Boolean` | `false` | Allow unsigned output (local debug only) |
+| `failOnAgpToolchainMismatch` | `Boolean` | `false` | Fail when AGP version differs from plugin pin |
+| `axmlStrictMode` | `Boolean` | `false` | Fail when binary layout cannot rename View class |
+| `projectPackagePrefixes` | `List<String>` | derived from `applicationId` | Project package prefixes for DEX companion classes |
+| `syncBaselineProfile` | `Boolean` | `true` | Recompile baseline profile from merged mapping |
+| `failOnBaselineProfileSyncFailure` | `Boolean` | `true` | Fail when profile recompile fails |
+| `baselineProfileHumanReadable` | `File` | variant default | Override `baseline-prof.txt` input |
 
 ## `junkCode { }`
 
-编译期在独立源码目录生成 Junk 代码，参与 Java 编译并打进 DEX。
+Generates junk code in an isolated source set; compiled into DEX.
 
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | Junk Code 开关 | ✓ |
-| `profile` | `String` | `light` | utility 类量级 preset | ✓ |
-| `packageCount` | `Int` | `5` | 子包数量（`custom` 时生效） | ✓ |
-| `classCount` | `Int` | `30` | utility 类总数，**不含** Activity（`custom` 时生效） | ✓ |
-| `methodsPerClass` | `Int` | `8` | 每类方法数（`custom` 时生效） | ✓ |
-| `activityCountPerPackage` | `Int` | `0` | 每子包生成的 Activity 数；`0` = 不生成组件 | ✓ |
-| `excludeActivityJavaFile` | `Boolean` | `false` | 跳过 Activity `.java`，仍生成 layout / Manifest 片段 | ✓ |
-| `mergeJunkManifest` | `Boolean` | `false` | 合并 Junk Activity 到 app Manifest（需 `activityCountPerPackage > 0`） | ✓ |
-| `resPrefix` | `String` | `junk_` | Activity layout 资源名前缀 | ✓ |
-| `packagePrefix` | `String` | `{applicationId}.shell.junk` | Junk 类包名前缀 | — |
+| Option | Type | Default | Description | Variant override |
+|--------|------|---------|-------------|------------------|
+| `enabled` | `Boolean` | `true` | Junk Code switch | ✓ |
+| `profile` | `String` | `light` | Utility class scale preset | ✓ |
+| `packageCount` | `Int` | `5` | Sub-package count (`custom` profile) | ✓ |
+| `classCount` | `Int` | `30` | Utility class count, **excludes** Activities (`custom`) | ✓ |
+| `methodsPerClass` | `Int` | `8` | Methods per class (`custom`) | ✓ |
+| `activityCountPerPackage` | `Int` | `0` | Activities per sub-package; `0` = none | ✓ |
+| `excludeActivityJavaFile` | `Boolean` | `false` | Skip Activity `.java`; still emit layout / Manifest snippet | ✓ |
+| `mergeJunkManifest` | `Boolean` | `false` | Merge junk Activities into app Manifest (needs `activityCountPerPackage > 0`) | ✓ |
+| `resPrefix` | `String` | `junk_` | Activity layout resource prefix | ✓ |
+| `packagePrefix` | `String` | `{applicationId}.shell.junk` | Junk class package prefix | — |
 
-### `profile` preset（仅 utility 类）
+### `profile` presets (utility classes only)
 
-| profile | 子包数 | utility 类数 | 每类方法数 |
-|---------|--------|--------------|------------|
+| profile | Sub-packages | Utility classes | Methods/class |
+|---------|--------------|-----------------|---------------|
 | `light` | 5 | 30 | 8 |
 | `medium` | 10 | 100 | 12 |
 | `heavy` | 30 | 1500 | 20 |
-| `custom` | 使用 `packageCount` / `classCount` / `methodsPerClass` | | |
+| `custom` | Uses `packageCount` / `classCount` / `methodsPerClass` | | |
 
 ## `resourceObfuscate { }`
 
-编译期资源 overlay（图片改写、XML 注入等）。
+Compile-time resource overlay (image rewrite, XML injection, etc.).
 
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | 资源 overlay 开关 | ✓ |
-| `renameXmlFiles` | `Boolean` | `false` | 混淆 XML 文件名 | ✓ |
-| `injectXmlJunk` | `Boolean` | `false` | 在 layout 末尾注入注释占位 | ✓ |
-| `imageAntiDetect` | `Boolean` | `true` | 编译期图片 metadata 改写 | ✓ |
-| `imageMicroCompress` | `Boolean` | `true` | 图片微压缩总开关 | — |
-| `imagePngMicroCompress` | `Boolean` | `false` | PNG 微压缩 | ✓ |
-| `imageJpegMicroCompress` | `Boolean` | `true` | JPEG 微压缩 | ✓ |
-| `imageMicroCompressQuality` | `Float` | `0.97` | 微压缩质量（0~1） | — |
-| `imageJpegMetadataMode` | `String` | `both` | JPEG metadata 注入模式：`com` / `exif` / `both` | — |
-| `imagePngExtraChunks` | `Boolean` | `true` | PNG 追加 extra chunk | — |
-| `imagePerceptualNoise` | `Boolean` | `false` | LSB 微扰动（防 pHash 场景） | — |
-| `verifyImageAntiDetect` | `Boolean` | `true` | overlay 阶段校验图片改写生效 | — |
-| `failOnUnchangedImageAntiDetect` | `Boolean` | `true` | 图片未改写时 fail build | — |
-| `imageAntiDetectApkFallback` | `Boolean` | `true` | APK 产物变换阶段图片 metadata 兜底 | — |
-| `verifyApkImageAntiDetect` | `Boolean` | `false` | APK 构建后 decode 校验全部 res 图片 | — |
-| `failOnApkImageAntiDetectFailure` | `Boolean` | `true` | APK 图片校验失败时 fail build | — |
-| `failOnSkippedUnsupportedImageAntiDetect` | `Boolean` | `false` | overlay 无法处理 PNG/JPEG 时 fail build | — |
-| `imageAntiDetectBundleFallback` | `Boolean` | `true` | AAB 产物变换阶段图片 metadata 兜底 | — |
-| `verifyBundleImageAntiDetect` | `Boolean` | `false` | AAB 构建后 decode 校验全部 res 图片 | — |
-| `failOnBundleImageAntiDetectFailure` | `Boolean` | `true` | AAB 图片校验失败时 fail build | — |
-| `overlayParallelism` | `Int` | `0` | overlay 并行度；`0` = min(4, CPU) | — |
-| `incrementalOverlay` | `Boolean` | `true` | 按 res 目录 fingerprint 增量 skip | ✓ |
-| `maxWebpExtendedSkipRatio` | `Double` | `0.05` | WebP 扩展格式 skip 占比阈值；`0` = 不校验 | — |
+| Option | Type | Default | Description | Variant override |
+|--------|------|---------|-------------|------------------|
+| `enabled` | `Boolean` | `true` | Resource overlay switch | ✓ |
+| `renameXmlFiles` | `Boolean` | `false` | Obfuscate XML file names | ✓ |
+| `injectXmlJunk` | `Boolean` | `false` | Inject comment placeholders at end of layouts | ✓ |
+| `imageAntiDetect` | `Boolean` | `true` | Rewrite image metadata at compile time | ✓ |
+| `imageMicroCompress` | `Boolean` | `true` | Image micro-compress master switch | — |
+| `imagePngMicroCompress` | `Boolean` | `false` | PNG micro-compress | ✓ |
+| `imageJpegMicroCompress` | `Boolean` | `true` | JPEG micro-compress | ✓ |
+| `imageMicroCompressQuality` | `Float` | `0.97` | Quality (0–1) | — |
+| `imageJpegMetadataMode` | `String` | `both` | JPEG metadata mode: `com` / `exif` / `both` | — |
+| `imagePngExtraChunks` | `Boolean` | `true` | Append PNG extra chunks | — |
+| `imagePerceptualNoise` | `Boolean` | `false` | LSB noise (anti pHash) | — |
+| `verifyImageAntiDetect` | `Boolean` | `true` | Verify image rewrite during overlay | — |
+| `failOnUnchangedImageAntiDetect` | `Boolean` | `true` | Fail when image unchanged | — |
+| `imageAntiDetectApkFallback` | `Boolean` | `true` | APK transform-stage image metadata fallback | — |
+| `verifyApkImageAntiDetect` | `Boolean` | `false` | Decode-verify all res images after APK build | — |
+| `failOnApkImageAntiDetectFailure` | `Boolean` | `true` | Fail on APK image verify failure | — |
+| `failOnSkippedUnsupportedImageAntiDetect` | `Boolean` | `false` | Fail when overlay skips PNG/JPEG | — |
+| `imageAntiDetectBundleFallback` | `Boolean` | `true` | AAB transform-stage image metadata fallback | — |
+| `verifyBundleImageAntiDetect` | `Boolean` | `false` | Decode-verify all res images after AAB build | — |
+| `failOnBundleImageAntiDetectFailure` | `Boolean` | `true` | Fail on AAB image verify failure | — |
+| `overlayParallelism` | `Int` | `0` | Overlay parallelism; `0` = min(4, CPUs) | — |
+| `incrementalOverlay` | `Boolean` | `true` | Incremental skip by res directory fingerprint | ✓ |
+| `maxWebpExtendedSkipRatio` | `Double` | `0.05` | Extended WebP skip ratio threshold; `0` = disabled | — |
 
 ## `bundleResourceObfuscate { }`
 
-APK / AAB 内 `resources.arsc` 与 res 路径混淆。
+Obfuscates `resources.arsc` and `res` paths inside APK/AAB.
 
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | AAB 资源表混淆 | ✓ |
-| `obfuscateApk` | `Boolean` | `true` | APK 资源表混淆 | ✓ |
-| `obfuscationMode` | `String` | `default` | 混淆模式：`default` / `dir` / `file` | — |
-| `mappingFile` | `File` | 自动生成 | 增量复用的 `resources-mapping.txt` | — |
-| `reuseIncrementalMapping` | `Boolean` | `true` | 自动复用上次 Transform 的 mapping | — |
+| Option | Type | Default | Description | Variant override |
+|--------|------|---------|-------------|------------------|
+| `enabled` | `Boolean` | `true` | AAB resource table obfuscation | ✓ |
+| `obfuscateApk` | `Boolean` | `true` | APK resource table obfuscation | ✓ |
+| `obfuscationMode` | `String` | `default` | Mode: `default` / `dir` / `file` | — |
+| `mappingFile` | `File` | auto | Reusable `resources-mapping.txt` | — |
+| `reuseIncrementalMapping` | `Boolean` | `true` | Reuse mapping from last transform | — |
 
 ## `componentRename { }`
 
-R8 完成后，将 Manifest / layout / navigation 等引用的组件完整类名（FQCN）映射为随机短名，并 patch DEX。
+After R8, maps component FQCNs referenced in Manifest / layout / navigation to random short names and patches DEX.
 
 ```
-com.shortvideo.playlet.SplashActivity  →  e3.gj1
-com.shortvideo.playlet.MainService     →  z0.re4.hu6
+com.example.app.SplashActivity  →  e3.gj1
+com.example.app.MainService     →  z0.re4.hu6
 ```
 
-类名 simple name **也会变**，不是「只换包名」。
+Simple names change too — not package-only renames.
 
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | Activity / Service / Receiver / Provider 改类名 | ✓ |
-| `excludePatterns` | `List<String>` | `*.debug.*`, `*Hilt_*`, `*_HiltModules*` | 不参与改名的 FQCN glob | — |
+| Option | Type | Default | Description | Variant override |
+|--------|------|---------|-------------|------------------|
+| `enabled` | `Boolean` | `true` | Rename Activity / Service / Receiver / Provider | ✓ |
+| `excludePatterns` | `List<String>` | `*.debug.*`, `*Hilt_*`, `*_HiltModules*` | FQCN globs to skip | — |
 
 ## `viewRename { }`
 
-R8 完成后，替换 layout / navigation XML 中**自定义 View** 的类名（系统 / AndroidX 控件不改）。
+After R8, renames custom View classes in layout / navigation XML (system / AndroidX widgets unchanged).
 
-| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
-|------|------|--------|------|----------------|
-| `enabled` | `Boolean` | `true` | 自定义 View 改类名 | ✓ |
-| `excludePatterns` | `List<String>` | `*.debug.*`, `*Hilt_*`, `*_HiltModules*` | 不参与改名的类名 glob | — |
-| `excludeResXmlEntryPatterns` | `List<String>` | 内置广告 SDK layout 规则 | 跳过改写的 layout 路径 glob | — |
+| Option | Type | Default | Description | Variant override |
+|--------|------|---------|-------------|------------------|
+| `enabled` | `Boolean` | `true` | Custom View rename | ✓ |
+| `excludePatterns` | `List<String>` | `*.debug.*`, `*Hilt_*`, `*_HiltModules*` | Class name globs to skip | — |
+| `excludeResXmlEntryPatterns` | `List<String>` | built-in ad SDK layout rules | Layout path globs to skip | — |
 
 ## `variantConfig { create("<variant>") { } }`
 
-按 variant 名（如 `googleRelease`）覆盖全局配置。variant 名 = flavor + buildType 拼接（全小写）。
+Override global config per variant name (e.g. `googleRelease`). Variant name = flavor + buildType, lowercase.
 
 ```kotlin
 variantConfig {
@@ -148,9 +150,9 @@ variantConfig {
 }
 ```
 
-| 子块 | 可覆盖项 |
-|------|----------|
-| （顶层） | `seed` |
+| Block | Overridable options |
+|-------|---------------------|
+| (top-level) | `seed` |
 | `junkCode` | `enabled`, `profile`, `packageCount`, `classCount`, `methodsPerClass`, `activityCountPerPackage`, `excludeActivityJavaFile`, `mergeJunkManifest`, `resPrefix` |
 | `resourceObfuscate` | `enabled`, `renameXmlFiles`, `injectXmlJunk`, `imageAntiDetect`, `imagePngMicroCompress`, `imageJpegMicroCompress`, `incrementalOverlay` |
 | `bundleResourceObfuscate` | `enabled`, `obfuscateApk` |
