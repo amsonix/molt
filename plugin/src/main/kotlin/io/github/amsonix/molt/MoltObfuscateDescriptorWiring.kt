@@ -65,19 +65,78 @@ internal object MoltObfuscateDescriptorWiring {
         }
     }
 
+    fun collectVariantSourceSetNames(variant: ApplicationVariant): List<String> =
+        collectVariantSourceSetNames(
+            variantName = variant.name,
+            productFlavors = variant.productFlavors,
+            buildType = variant.buildType,
+        )
+
+    fun collectVariantSourceSetNames(
+        variantName: String,
+        productFlavors: List<Pair<String, String>>,
+        buildType: String?,
+    ): List<String> =
+        buildList {
+            add("main")
+            addAll(productFlavors.map { (_, flavorName) -> flavorName })
+            buildType?.let { type ->
+                val combinedFlavor = variantName.removeSuffix(variantCapitalizedName(type))
+                if (combinedFlavor.isNotBlank() && combinedFlavor != variantName) add(combinedFlavor)
+                add(type)
+            }
+            add(variantName)
+        }.distinct()
+
     fun collectVariantSourceSets(
         android: AppExtension,
         variant: ApplicationVariant,
-    ) = buildList {
-        add("main")
-        addAll(variant.productFlavors.map { (_, flavorName) -> flavorName })
-        variant.buildType?.let { buildType ->
-            val combinedFlavor = variant.name.removeSuffix(variantCapitalizedName(buildType))
-            if (combinedFlavor.isNotBlank() && combinedFlavor != variant.name) add(combinedFlavor)
-            add(buildType)
-        }
-        add(variant.name)
-    }.distinct().mapNotNull(android.sourceSets::findByName)
+    ) = collectVariantSourceSetNames(variant).mapNotNull(android.sourceSets::findByName)
+
+    /**
+     * variant 级 res 源目录；AGP 在 [onVariants] 时 [SourceSet.res.srcDirs] 可能尚未就绪，
+     * 因此由调用方通过 [org.gradle.api.provider.Provider] 延迟到 task 执行前再解析。
+     */
+    fun collectVariantResDirs(
+        project: Project,
+        android: AppExtension,
+        variant: ApplicationVariant,
+    ): List<File> = collectVariantResDirs(
+        project = project,
+        android = android,
+        sourceSetNames = collectVariantSourceSetNames(variant),
+    )
+
+    fun collectVariantResDirs(
+        project: Project,
+        android: AppExtension,
+        sourceSetNames: List<String>,
+    ): List<File> {
+        val fromAgp = sourceSetNames.mapNotNull(android.sourceSets::findByName)
+            .flatMap { it.res.srcDirs }
+            .filter { it.isDirectory && isProjectResSourceDir(project, it) }
+            .distinctBy { it.absoluteFile.normalize() }
+        val fromSourceTree = conventionalVariantResDirs(project, sourceSetNames)
+        return (fromSourceTree + fromAgp)
+            .filter { it.isDirectory }
+            .distinctBy { it.absoluteFile.normalize() }
+    }
+
+    private fun isProjectResSourceDir(project: Project, dir: File): Boolean {
+        val srcRoot = File(project.projectDir, "src").absoluteFile.normalize()
+        val normalized = dir.absoluteFile.normalize()
+        return normalized.path == srcRoot.path ||
+            normalized.path.startsWith(srcRoot.path + File.separator)
+    }
+
+    internal fun conventionalVariantResDirs(
+        project: Project,
+        sourceSetNames: Iterable<String>,
+    ): List<File> =
+        sourceSetNames
+            .map { name -> File(project.projectDir, "src/$name/res") }
+            .filter { it.isDirectory }
+            .distinctBy { it.absoluteFile.normalize() }
 
     fun collectLayoutDirs(resDirs: Iterable<File>): List<File> =
         resDirs.flatMap { resDir ->

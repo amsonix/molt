@@ -2,32 +2,36 @@
 
 ## Unreleased
 
+（暂无）
+
+## 1.1.0 — 2026-08-07
+
 ### Added
-- `IntegrationTestAssumptions`：集成/probe 测试缺产物时 JUnit skipped（禁止 silent pass）
-- `MoltObfuscateTransformVerify`：APK/AAB keep 与图片验包逻辑从 Transform Task 拆出
-- `WebpExtendedSkipRatio`：`maxWebpExtendedSkipRatio` 构建期校验（overlay 任务 fail-fast）
-- `failOnAgpToolchainMismatch`：AGP 与插件 pin 版本漂移可选 fail build
-- `moltObfuscateIntegrationPrepare` / `moltObfuscateNightlyDexIntegration`：nightly 先构建宿主工程再跑 DEX 集成
-- `moltObfuscateMappingParityCheckNightly`：nightly 默认纳入 mapping parity（`-PrunMappingParityCheck=0` 可关）
-- mapping parity：entry（res id）规模作 nightly fail 门禁；dir/path 仅诊断输出
+- `moltPrintVariantPlan`：配置期诊断任务，打印各 variant 开关、任务名与产物路径
+- `failOnCrashlyticsHookFailure`：Crashlytics upload 接线失败时可选 fail build（默认 warn）
+- `failOnReleaseMinifyDisabled`：post-R8 能力开启但 `minifyEnabled=false` 时可选 fail（默认 warn）
+- Feature probe 矩阵 + CI（`tools/feature-probe.sh`、`feature-probe.yml`）
+- AGP 矩阵扩展至 **9.0.0 – 9.3.0**（90/90 PASS）
+- Crashlytics 2.x / 3.x 探针（smoke + rename E2E）
+- `CrashlyticsUploadTaskBinding`：按 task 类型缓存 `MethodHandle`，减少重复反射
 
 ### Changed
-- `moltObfuscateMappingParityCheck` 默认 `-PintegrationVariant` / `googleRelease` 解析 mapping 路径
-- `tools/molt-verify.sh`：nightly 内含宿主 assemble + parity；脚本侧 WebP 占比检查保留为二次校验
-- README：产物路径地图、CI 分层说明更新
+- 版本号 **1.1.0**；README / plugin README / COMPATIBILITY 同步（产物路径地图、AGP 升级 checklist、Configuration Cache 说明）
+- `moltObfuscateTransformE2eTest` 等改为 feature probe 别名
+- nightly 聚合：`moltObfuscateNightlyVerify` 纳入 feature probe nightly
 
 ### Fixed
-- nightly DEX 集成在宿主 APK 构建前执行导致 CI 失败
-- probe 测试缺 APK/mapping 时 silent pass
-- `DexMappingRewriteApkGeneratorTest` 纳入 nightly DEX 集成任务
-- `RUN_QUICK_DEX=1 check` 在无集成 APK 时 skip quickDexVerify（不再 fail）
+- AGP 8.0.2 – 8.7.x Crashlytics 2.x stub 探针 NPE（`mappingFileProvider` 初始化 + null-safe assert）
+- AGP 8.0.2 APK E2E 路径与 signing fixture
+- keep 验包误报、resources-mapping ID 解析、baseline profile skip 逻辑
 
-### Added
-- `MoltObfuscateApkListingSeed` 接入 variant 接线（Listing metadata 兜底）
-- `moltObfuscateMappingParityCheck`：APK/AAB mapping 规模对比
-- `imagePerceptualNoise` 贯通 Transform 图片兜底（APK + AAB）
-- `resource-keep` README + parser/baseline 单测
-- PR 可选 `RUN_QUICK_DEX=1` 加速 check
+## 1.0.0
+
+<details>
+<summary>1.0.0 及更早变更（折叠）</summary>
+
+## Unreleased (archived — shipped in 1.0.0 / 1.1.0)
+
 - APK Transform 改用 AGP `SingleArtifact.APK` + `toTransformMany`（`ContainsMany` 目录 artifact）
 - `failOnBaselineProfileSyncFailure`：baseline profile 重编失败可 fail build（默认 true）
 - keep 验包合并 keep.xml 精确条目（通配符仍仅白名单）
@@ -124,3 +128,5 @@
 
 ### Removed
 - `componentRename.mode=compile` 及 compile 期 Manifest/Layout/ASM Transform（仅保留 postR8）
+
+</details>

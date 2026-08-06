@@ -1,0 +1,38 @@
+# Feature probe matrix (orthogonal to agp-compat-matrix.txt)
+# Columns: feature_id  preset  probe  agp  gradle  tier  required
+#
+# probe:  smoke | apk | aab | apk-rename | aab-rename | all | sample | integration
+# tier:   gate (PR) | nightly | cross-agp (9.3.0 sanity) | weekly
+#
+# Default AGP/Gradle unless row overrides. gate rows run on PR; nightly runs all rows.
+
+# --- gate (PR) ---
+F00-baseline          default         all          8.13.2  8.13  gate       1
+F01-overlay-rename    overlay-rename  smoke        8.13.2  8.13  gate       1
+F05-arsc-apk          default         apk          8.13.2  8.13  gate       1
+F06-arsc-aab          default         aab          8.13.2  8.13  gate       1
+F09-rename-apk        rename-full     apk-rename   8.13.2  8.13  gate       1
+
+# --- nightly only (compile-time / overlay) ---
+F02-overlay-images    overlay-images  smoke        8.13.2  8.13  nightly    0
+F03-overlay-noise     overlay-noise   smoke        8.13.2  8.13  nightly    0
+F04-junk-activity     junk-activity   smoke        8.13.2  8.13  nightly    0
+F14-variant-config    variant-config  smoke        8.13.2  8.13  nightly    0
+F15-shrink-keep       shrink-keep     smoke        8.13.2  8.13  nightly    0
+
+# --- nightly (transform variants) ---
+F07-arsc-dir          arsc-dir        apk          8.13.2  8.13  nightly    0
+F08-arsc-file         arsc-file       apk          8.13.2  8.13  nightly    0
+F10-rename-aab        rename-full     aab-rename   8.13.2  8.13  nightly    0
+F11-keep-verify-apk   keep-verify     apk          8.13.2  8.13  nightly    0
+F12-keep-verify-aab   keep-verify     aab          8.13.2  8.13  nightly    0
+F13-baseline-sync     baseline-sync   apk-rename   8.13.2  8.13  nightly    0
+
+# --- cross-agp (9.3.0 bookend; weekly / release) ---
+F00-baseline          default         all          9.3.0   9.5   cross-agp  0
+F05-arsc-apk          default         apk          9.3.0   9.5   cross-agp  0
+F09-rename-apk        rename-full     apk-rename   9.3.0   9.5   cross-agp  0
+
+# --- weekly (real project smoke; skip when sample/integration root missing) ---
+F98-integration       default         integration  8.13.2  8.13  weekly     0
+F99-sample            default         sample       8.13.2  8.13  weekly     0

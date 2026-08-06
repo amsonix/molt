@@ -19,7 +19,6 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
 import com.android.build.api.artifact.ArtifactTransformationRequest
-import com.android.build.api.variant.Aapt2
 import com.android.build.api.variant.BuiltArtifact
 import io.github.amsonix.molt.internal.bundle.ApkResourceObfuscateEngine
 import io.github.amsonix.molt.internal.bundle.ApkSignerHelper
@@ -373,8 +372,9 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
     @get:Input
     abstract val projectPackagePrefixes: org.gradle.api.provider.ListProperty<String>
 
-    @get:Nested
-    abstract val aapt2: Property<Aapt2>
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val aapt2Executable: RegularFileProperty
 
     @get:Optional
     @get:InputFile
@@ -467,7 +467,7 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
             ApkResourceObfuscateEngine.Config(
                 inputApk,
                 unsignedOut,
-                aapt2.get().executable.get().asFile,
+                aapt2Executable.get().asFile,
                 seed.get(),
                 keepRules,
                 obfuscationMode.get(),
@@ -504,7 +504,7 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
                 logger = logger,
                 inputApk = inputApk,
                 outputApk = outputApk,
-                aapt2Executable = aapt2.get().executable.get().asFile,
+                aapt2Executable = aapt2Executable.get().asFile,
                 declaredKeepRules = declaredKeepRules,
                 useFirebaseBaseline = useFirebaseArtifactVerifyBaseline.get(),
                 failOnEmptyBaseline = failOnEmptyArtifactVerifyBaseline.get(),

@@ -76,6 +76,18 @@ abstract class MoltObfuscateExtension @Inject constructor(
         project.objects.property(Boolean::class.java).convention(true)
 
     /**
+     * hookCrashlyticsMappingUpload 开启且 upload 任务存在但接线失败时 fail build（默认 warn）。
+     */
+    val failOnCrashlyticsHookFailure: Property<Boolean> =
+        project.objects.property(Boolean::class.java).convention(false)
+
+    /**
+     * Release variant 未开启 R8（minifyEnabled=false）但 post-R8 能力（改类名 / arsc）仍开启时 fail build（默认 warn）。
+     */
+    val failOnReleaseMinifyDisabled: Property<Boolean> =
+        project.objects.property(Boolean::class.java).convention(false)
+
+    /**
      * verifyApkKeep/verifyBundleKeep 开启但未配置 Firebase baseline 且无 keep.xml 精确条目时 fail build。
      * 避免验包开关打开但实际跳过。
      */

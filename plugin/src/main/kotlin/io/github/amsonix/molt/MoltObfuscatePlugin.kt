@@ -4,6 +4,7 @@ import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.AppExtension
 import io.github.amsonix.molt.internal.util.MoltObfuscateDefaults
+import io.github.amsonix.molt.internal.util.ObfuscationMappingFileResolver
 import io.github.amsonix.molt.internal.util.variantCapitalizedName
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -30,6 +31,7 @@ class MoltObfuscatePlugin : Plugin<Project> {
                     )
             }
             configureApplication(target, extension)
+            target.tasks.register("moltPrintVariantPlan", MoltPrintVariantPlanTask::class.java)
         }
     }
 
@@ -39,6 +41,7 @@ class MoltObfuscatePlugin : Plugin<Project> {
         wireApplicationIdDefaults(project, android, extension)
         wireJunkProguardKeep(project, android, extension)
         wireShrinkKeepValidation(project, extension, android)
+        wireReleaseMinifyValidation(project, extension, android)
 
         androidComponents.onVariants(androidComponents.selector().all()) { variant ->
             if (!shouldRegister(extension, variant.buildType)) return@onVariants
@@ -51,12 +54,13 @@ class MoltObfuscatePlugin : Plugin<Project> {
                 seed,
             )
             val selectedSourceSets = MoltObfuscateDescriptorWiring.collectVariantSourceSets(android, variant)
+            val sourceSetNames = MoltObfuscateDescriptorWiring.collectVariantSourceSetNames(variant)
             val sourceRoots = selectedSourceSets.flatMap { sourceSet ->
                 sourceSet.java.srcDirs + File(project.projectDir, "src/${sourceSet.name}/kotlin")
             }.distinctBy { it.absoluteFile.normalize() }
             val manifests = selectedSourceSets.map { it.manifest.srcFile }
             val layoutDirs = MoltObfuscateDescriptorWiring.collectLayoutDirs(
-                selectedSourceSets.flatMap { it.res.srcDirs },
+                MoltObfuscateDescriptorWiring.collectVariantResDirs(project, android, sourceSetNames),
             )
             val descriptorTask = MoltObfuscateDescriptorWiring.registerVariantDescriptorTask(
                 project = project,
@@ -76,8 +80,9 @@ class MoltObfuscatePlugin : Plugin<Project> {
                 layoutDirs,
             )
             MoltObfuscateDescriptorWiring.scheduleLibraryAutoWire(project, variant.name, prepareTask)
-            val inputResDirs = selectedSourceSets.flatMap { it.res.srcDirs }
-                .distinctBy { it.absoluteFile.normalize() }
+            val inputResDirsProvider = project.provider {
+                MoltObfuscateDescriptorWiring.collectVariantResDirs(project, android, sourceSetNames)
+            }
             MoltObfuscateVariantWiring.registerVariant(
                 project = project,
                 extension = extension,
@@ -85,9 +90,9 @@ class MoltObfuscatePlugin : Plugin<Project> {
                 variantName = variant.name,
                 variantApplicationId = variant.applicationId.get(),
                 seed = seed,
-                inputResDirs = inputResDirs,
+                inputResDirsProvider = inputResDirsProvider,
                 registerApplicationOutputs = {
-                    val r8Mapping = variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE)
+                    val r8Mapping = ObfuscationMappingFileResolver.resolve(project, variant)
                     val mergeTask = MoltObfuscateVariantWiring.wirePrepareMapping(
                         project,
                         extension,
@@ -102,7 +107,7 @@ class MoltObfuscatePlugin : Plugin<Project> {
                         prepareTask = prepareTask,
                         mergeTask = mergeTask,
                         r8Mapping = r8Mapping,
-                        aapt2 = androidComponents.sdkComponents.aapt2,
+                        sdkComponents = androidComponents.sdkComponents,
                         resolveProjectPackagePrefixes = { applicationId ->
                             resolveProjectPackagePrefixes(extension, applicationId)
                         },
@@ -167,6 +172,38 @@ class MoltObfuscatePlugin : Plugin<Project> {
             "molt.projectPackagePrefixes resolved empty (applicationId=$applicationId)"
         }
         return resolved
+    }
+
+    private fun wireReleaseMinifyValidation(
+        project: Project,
+        extension: MoltObfuscateExtension,
+        android: AppExtension,
+    ) {
+        project.afterEvaluate {
+            if (!extension.enabled.get()) return@afterEvaluate
+            android.applicationVariants.forEach { variant ->
+                if (!shouldRegister(extension, variant.buildType.name)) return@forEach
+                if (variant.buildType.isMinifyEnabled) return@forEach
+                val settings = extension.resolveVariantSettings(variant.name)
+                val needsMinify = settings.componentRenameEnabled ||
+                    settings.viewRenameEnabled ||
+                    settings.bundleResourceObfuscateEnabled ||
+                    settings.obfuscateApk
+                if (!needsMinify) return@forEach
+                val message =
+                    "molt: variant '${variant.name}' has minifyEnabled=false but post-R8 features are enabled " +
+                        "(componentRename=${settings.componentRenameEnabled}, " +
+                        "viewRename=${settings.viewRenameEnabled}, " +
+                        "bundleResourceObfuscate=${settings.bundleResourceObfuscateEnabled}, " +
+                        "obfuscateApk=${settings.obfuscateApk}). " +
+                        "Enable R8 on release or disable rename/arsc for this variant."
+                if (extension.failOnReleaseMinifyDisabled.get()) {
+                    error(message)
+                } else {
+                    project.logger.warn(message)
+                }
+            }
+        }
     }
 
     private fun wireShrinkKeepValidation(

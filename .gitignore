@@ -3,6 +3,7 @@ build/
 **/build/
 .kotlin/
 local.properties
+sample/gradle.properties.local
 .idea/
 *.iml
 .DS_Store

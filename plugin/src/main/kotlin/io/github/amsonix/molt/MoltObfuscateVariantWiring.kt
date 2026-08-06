@@ -2,11 +2,13 @@ package io.github.amsonix.molt
 
 import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.artifact.ArtifactTransformationRequest
-import com.android.build.api.variant.Aapt2
+import com.android.build.api.dsl.SdkComponents
 import com.android.build.api.variant.ApplicationVariant
 import io.github.amsonix.molt.internal.bundle.MoltObfuscateApkListingSeed
 import io.github.amsonix.molt.internal.util.CrashlyticsMappingUploadWiring
 import io.github.amsonix.molt.internal.bundle.VariantSigningConfig
+import io.github.amsonix.molt.internal.util.Aapt2ExecutableResolver
+import io.github.amsonix.molt.internal.util.AgpToolchainCompatibility
 import io.github.amsonix.molt.internal.util.KeepXmlDiscovery
 import io.github.amsonix.molt.internal.util.MoltObfuscateDefaults
 import io.github.amsonix.molt.internal.util.requireValidObfuscationMode
@@ -93,6 +95,7 @@ internal object MoltObfuscateVariantWiring {
         CrashlyticsMappingUploadWiring.wire(
             project = project,
             hookEnabled = extension.hookCrashlyticsMappingUpload.get(),
+            failOnHookFailure = extension.failOnCrashlyticsHookFailure.get(),
             uploadTaskName = "uploadCrashlyticsMappingFile$capitalized",
             mergeTask = mergeTask,
         )
@@ -106,7 +109,7 @@ internal object MoltObfuscateVariantWiring {
         variantName: String,
         variantApplicationId: String,
         seed: Int,
-        inputResDirs: Collection<File>,
+        inputResDirsProvider: Provider<out Iterable<File>>,
         registerApplicationOutputs: (VariantTasks) -> Unit,
         wireGeneratedSources: (
             TaskProvider<MoltObfuscateJunkCodeTask>,
@@ -183,7 +186,7 @@ internal object MoltObfuscateVariantWiring {
             maxWebpExtendedSkipRatio.set(extension.resourceObfuscate.maxWebpExtendedSkipRatio)
             incrementalOverlay.set(resourceSettings.incrementalOverlay)
             keepXmlFiles.from(resourceKeepFiles)
-            this.inputResDirs.from(inputResDirs)
+            this.inputResDirs.from(inputResDirsProvider)
             outputDirectory.set(project.layout.buildDirectory.dir("generated/shell-obfuscate/$variantName/res"))
             overlayCacheDirectory.set(
                 project.layout.buildDirectory.dir("shell-obfuscate/$variantName/res-overlay-cache"),
@@ -208,7 +211,7 @@ internal object MoltObfuscateVariantWiring {
         prepareTask: TaskProvider<MoltObfuscatePrepareMappingTask>,
         mergeTask: TaskProvider<MoltObfuscateMergeMappingTask>,
         r8Mapping: Provider<RegularFile>,
-        aapt2: Provider<Aapt2>,
+        sdkComponents: SdkComponents,
         resolveProjectPackagePrefixes: (String) -> List<String>,
     ) {
         if (!extension.enabled.get()) return
@@ -236,6 +239,19 @@ internal object MoltObfuscateVariantWiring {
         )
 
         if (variantSettings.bundleResourceObfuscateEnabled) {
+            val agpVersion = AgpToolchainCompatibility.readAgpVersion()
+            if (agpVersion != null &&
+                !AgpToolchainCompatibility.isAgpAtLeast(
+                    agpVersion,
+                    AgpToolchainCompatibility.MIN_AGP_FOR_BUNDLE_TRANSFORM,
+                )
+            ) {
+                project.logger.warn(
+                    "molt: AAB resource transform (bundleResourceObfuscate.enabled) is probed on " +
+                        "AGP ${AgpToolchainCompatibility.MIN_AGP_FOR_BUNDLE_TRANSFORM}+; " +
+                        "current=$agpVersion — bundle transform may fail",
+                )
+            }
             val bundleTask = project.tasks.register<MoltObfuscateTransformBundleTask>(
                 "moltObfuscateTransformBundle$capitalized",
             ) {
@@ -360,7 +376,7 @@ internal object MoltObfuscateVariantWiring {
                     defaultMappingFile = apkMappingDir.map { dir -> dir.file("resources-mapping.txt") },
                 )
                 mappingOutputDirectory.set(apkMappingDir)
-                this.aapt2.set(aapt2)
+                aapt2Executable.set(Aapt2ExecutableResolver.resolve(project, sdkComponents))
                 signing.storeFile?.let(signingStoreFile::set)
                 signingStorePassword.set(signing.storePassword.orEmpty())
                 signingKeyAlias.set(signing.keyAlias.orEmpty())

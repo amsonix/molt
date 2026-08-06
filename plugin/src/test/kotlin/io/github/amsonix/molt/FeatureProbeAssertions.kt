@@ -1,0 +1,196 @@
+package io.github.amsonix.molt
+
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import java.io.File
+import java.util.zip.ZipFile
+
+/** feature_id / preset 级额外断言（task SUCCESS 之外）。 */
+object FeatureProbeAssertions {
+
+    fun assertSmoke(row: FeatureProbeMatrix.Row, root: File, buildOutput: String) {
+        when (row.featureId) {
+            "F00-baseline" -> assertDefaultBaselineSmoke(root)
+            "F01-overlay-rename" -> assertOverlayRenameSmoke(root, buildOutput)
+            "F02-overlay-images" -> assertOverlayImagesSmoke(root)
+            "F03-overlay-noise" -> assertOverlayNoiseSmoke(root)
+            "F04-junk-activity" -> assertJunkActivitySmoke(root, buildOutput)
+            "F14-variant-config" -> assertVariantConfigSmoke(root)
+            "F15-shrink-keep" -> assertShrinkKeepSmoke(buildOutput)
+        }
+    }
+
+    fun assertAfterApk(row: FeatureProbeMatrix.Row, root: File, agpVersion: String) {
+        when (row.preset) {
+            "arsc-dir", "arsc-file" -> assertArscMapping(root, row.preset)
+            "keep-verify" -> assertKeepVerifyApk(root, agpVersion)
+            "baseline-sync", "rename-full" -> if (row.featureId == "F13-baseline-sync") {
+                assertBaselineSyncApk(root)
+            }
+        }
+    }
+
+    fun assertAfterAab(row: FeatureProbeMatrix.Row, root: File) {
+        if (row.preset == "keep-verify") {
+            assertKeepVerifyAab(root)
+        }
+    }
+
+    fun assertAfterApkRename(row: FeatureProbeMatrix.Row, root: File) {
+        if (row.featureId == "F13-baseline-sync") {
+            assertBaselineSyncApk(root)
+        }
+        val shellMapping = File(root, "app/build/outputs/mapping/googleRelease/shell-obfuscate-mapping.txt")
+        assertTrue("merged mapping should exist after rename APK probe", shellMapping.isFile)
+    }
+
+    private fun assertDefaultBaselineSmoke(root: File) {
+        val mapping = File(root, "build/shell-obfuscate/googleRelease/component-mapping.json").readText()
+        assertTrue("mapping should include library activity", mapping.contains("fixture.lib.LibraryActivity"))
+
+        val layoutFiles = overlayLayoutFileNames(root)
+        assertTrue(
+            "google flavor layout should be overlayed (found: $layoutFiles)",
+            layoutFiles.contains("google.xml"),
+        )
+        assertTrue(
+            "main layout should be overlayed (found: $layoutFiles)",
+            layoutFiles.contains("base.xml"),
+        )
+        assertFalse(
+            "samsung flavor layout should stay isolated from googleRelease (found: $layoutFiles)",
+            layoutFiles.contains("samsung.xml"),
+        )
+
+        val junkKeep = File(root, "app/build/shell-obfuscate/molt-junk-keep.pro").readText()
+        assertTrue("junk keep rules should target fixture package", junkKeep.contains("fixture.custom.junk.**"))
+    }
+
+    private fun assertOverlayRenameSmoke(root: File, buildOutput: String) {
+        assertTrue(
+            "autoDiscoverKeepXml should mention library keep.xml",
+            buildOutput.contains("autoDiscoverKeepXml") &&
+                buildOutput.contains("library/src/main/res/raw/keep.xml"),
+        )
+        val generatedResRoot = File(root, "app/build/generated/shell-obfuscate/googleRelease/res")
+        val renameReport = File(root, "app/build/shell-obfuscate/googleRelease/xml-rename.txt")
+        val layoutFiles = overlayLayoutFileNames(root)
+        assertTrue(
+            "resource overlay should emit layout files " +
+                "(resRoot=${generatedResRoot.isDirectory}, " +
+                "xml-rename=${renameReport.isFile}, renameReport=${renameReport.takeIf { it.isFile }?.readText()?.lineSequence()?.take(5)?.joinToString()}, " +
+                "found=$layoutFiles)",
+            layoutFiles.isNotEmpty(),
+        )
+        assertTrue(
+            "kept layout should stay base.xml (found: $layoutFiles)",
+            layoutFiles.contains("base.xml"),
+        )
+        val renamedGoogle = layoutFiles.filter { it.endsWith(".xml") && it != "base.xml" }
+        assertTrue("google layout should be renamed (found: $layoutFiles)", renamedGoogle.isNotEmpty())
+        assertFalse(
+            "google.xml should not remain when rename enabled (found: $layoutFiles)",
+            layoutFiles.contains("google.xml"),
+        )
+    }
+
+    /**
+     * AGP 8.0 smoke 只跑 overlay 任务时，generated res 可能被 AGP 消费后不再保留；
+     * 回退读取 incremental overlay cache 中各源目录产物。
+     */
+    private fun overlayLayoutFileNames(root: File, variant: String = "googleRelease"): List<String> {
+        val generatedLayout = File(root, "app/build/generated/shell-obfuscate/$variant/res/layout")
+        if (generatedLayout.isDirectory) {
+            return generatedLayout.listFiles().orEmpty().filter { it.isFile }.map { it.name }
+        }
+        val cacheRoot = File(root, "app/build/shell-obfuscate/$variant/res-overlay-cache/dirs")
+        if (!cacheRoot.isDirectory) return emptyList()
+        return cacheRoot.listFiles().orEmpty()
+            .flatMap { entry ->
+                File(entry, "res/layout").listFiles().orEmpty().filter { it.isFile }.map { it.name }
+            }
+            .distinct()
+    }
+
+    private fun assertOverlayImagesSmoke(root: File) {
+        val report = File(root, "app/build/shell-obfuscate/googleRelease/image-anti-detect-report.txt")
+        val generatedDrawable = File(root, "app/build/generated/shell-obfuscate/googleRelease/res/drawable")
+        assertTrue(
+            "overlay-images should process probe assets",
+            report.isFile ||
+                generatedDrawable.walkTopDown().any { it.name.startsWith("probe.") },
+        )
+    }
+
+    private fun assertOverlayNoiseSmoke(root: File) {
+        val generatedDrawable = File(root, "app/build/generated/shell-obfuscate/googleRelease/res/drawable")
+        assertTrue(
+            "overlay-noise should emit processed drawable",
+            generatedDrawable.walkTopDown().any { it.name.contains("probe_noise") },
+        )
+    }
+
+    private fun assertJunkActivitySmoke(root: File, buildOutput: String) {
+        val junkKeep = File(root, "app/build/shell-obfuscate/molt-junk-keep.pro")
+        assertTrue("junk keep rules should be generated", junkKeep.isFile)
+        val junkManifest = File(root, "app/build/generated/shell-obfuscate/googleRelease/junk/AndroidManifest.xml")
+        assertTrue(
+            "junk manifest should be generated for activity junk",
+            junkManifest.isFile || buildOutput.contains("moltObfuscateJunkCodeGoogleRelease"),
+        )
+    }
+
+    private fun assertVariantConfigSmoke(root: File) {
+        val junkKeep = File(root, "app/build/shell-obfuscate/molt-junk-keep.pro").readText()
+        assertTrue(
+            "variantConfig heavy junk should expand keep rules",
+            junkKeep.lines().size >= 3,
+        )
+    }
+
+    private fun assertShrinkKeepSmoke(buildOutput: String) {
+        assertTrue(
+            "shrink keep merge should mention generateShrinkKeepXmlGoogleRelease",
+            buildOutput.contains("generateShrinkKeepXmlGoogleRelease") ||
+                buildOutput.contains("mergeShrinkKeepXml", ignoreCase = true),
+        )
+    }
+
+    private fun assertArscMapping(root: File, preset: String) {
+        val mapping = File(root, "build/shell-obfuscate/googleRelease/apk-resource/resources-mapping.txt")
+        assertTrue("APK resources-mapping.txt should exist for arsc preset", mapping.isFile)
+        val text = mapping.readText()
+        assertTrue("resources-mapping should not be empty", text.isNotBlank())
+        if (preset == "arsc-dir") {
+            assertTrue("dir mode mapping expected path-like entries", text.contains("/") || text.contains("dir"))
+        }
+    }
+
+    private fun assertKeepVerifyApk(root: File, agpVersion: String) {
+        val apk = AgpTestFixture.findReleaseApk(root, agpVersion)
+        assertTrue("APK should exist for keep-verify probe", apk != null)
+        ZipFile(apk!!).use { zip ->
+            val layoutEntries = zip.entries().asSequence()
+                .map { it.name }
+                .filter { it.startsWith("res/layout/") && it.endsWith(".xml") }
+                .toList()
+            assertTrue("APK should still contain a layout entry after keep verify", layoutEntries.isNotEmpty())
+        }
+    }
+
+    private fun assertKeepVerifyAab(root: File) {
+        val aab = AgpTestFixture.findReleaseAab(root)
+        assertTrue("AAB should exist for keep-verify probe", aab != null)
+    }
+
+    private fun assertBaselineSyncApk(root: File) {
+        val profmCandidates = listOf(
+            File(root, "app/build/intermediates/baselineprofiles/googleRelease/baseline.profm"),
+            File(root, "app/build/intermediates/binary_art_profile/googleRelease/baseline.profm"),
+            File(root, "app/build/intermediates/merged_art_profile/googleRelease/baseline.profm"),
+        )
+        val found = profmCandidates.any { it.isFile } ||
+            File(root, "app/build").walkTopDown().any { it.name == "baseline.profm" && it.isFile }
+        assertTrue("baseline.profm should be produced or updated after baseline-sync probe", found)
+    }
+}

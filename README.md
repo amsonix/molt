@@ -8,8 +8,8 @@ Build-time obfuscation for Android **multi-package / white-label** apps: inject 
 |---|---|
 | Plugin ID | `io.github.amsonix.molt` |
 | Extension | `molt { }` |
-| Version | `1.0.0` |
-| Requirements | AGP 8.13.x · JDK 17+ · Release with `isMinifyEnabled` |
+| Version | `1.1.0` |
+| Requirements | AGP **8.0.2 – 9.3.x** (probed) · [probe report](docs/COMPATIBILITY.md) |
 
 ## What it does
 
@@ -57,7 +57,7 @@ pluginManagement {
 }
 
 plugins {
-    id("io.github.amsonix.molt") version "1.0.0" apply false
+    id("io.github.amsonix.molt") version "1.1.0" apply false
 }
 ```
 
@@ -212,6 +212,22 @@ Declare resources that must stay readable in `res/raw/keep.xml`:
 
 The plugin merges keep files from the app and library dependencies.
 
+## Output artifacts
+
+Default output root: `<rootProject>/build/shell-obfuscate/<variant>/` (not under `app/build`).
+
+| Path | Description |
+|------|-------------|
+| `build/shell-obfuscate/<variant>/component-mapping.json` | Component rename mapping (JSON) |
+| `build/shell-obfuscate/<variant>/component-mapping.txt` | Component rename report |
+| `build/shell-obfuscate/<variant>/view-mapping.json` | View rename mapping |
+| `build/shell-obfuscate/<variant>/apk-resource/resources-mapping.txt` | APK resource table obfuscation mapping |
+| `build/shell-obfuscate/<variant>/bundle-resource/resources-mapping.txt` | AAB resource table obfuscation mapping |
+| `app/build/outputs/mapping/<variant>/shell-obfuscate-mapping.txt` | **Merged mapping** (R8 + rename); Crashlytics upload target |
+| `app/build/shell-obfuscate/molt-junk-keep.pro` | Auto-generated ProGuard keep for junk classes |
+
+Run `./gradlew :app:moltPrintVariantPlan` to print flags and paths for each variant.
+
 ## Notes
 
 1. **Release must enable R8** (`isMinifyEnabled = true`). Component / View rename patches DEX post-R8; skipped when minify is off.
@@ -219,6 +235,19 @@ The plugin merges keep files from the app and library dependencies.
 3. **Junk** `profile` **≠ Manifest**: `light/medium/heavy` only scales utility classes; Manifest changes need `activityCountPerPackage` + `mergeJunkManifest`.
 4. **Keep before obfuscate**: put ad / Firebase / SDK-critical resources in `keep.xml`; enable `verifyApkKeep` / `verifyBundleKeep` when appropriate.
 5. **AGP version**: 8.13.x recommended; mismatch warns by default, or set `failOnAgpToolchainMismatch = true` to fail the build.
+6. **Crashlytics hook**: set `failOnCrashlyticsHookFailure = true` in production if upload wiring must not silently skip.
+7. **Configuration Cache**: compatible with Gradle Configuration Cache; enable `org.gradle.configuration-cache=true` in `gradle.properties` (see [COMPATIBILITY.md](docs/COMPATIBILITY.md)).
+
+## Upgrading AGP
+
+When bumping AGP / Gradle in your project:
+
+1. Run `./tools/agp-compat.sh` (or CI matrix) on the molt repo against the target AGP.
+2. Run `FEATURE_PROBE_TIER=gate ./tools/feature-probe.sh` for feature regressions.
+3. Temporarily set `molt { failOnAgpToolchainMismatch.set(true) }` to catch aapt2-proto / bundletool pin drift.
+4. Rebuild release APK/AAB and verify `shell-obfuscate-mapping.txt` + Crashlytics upload wiring (`moltPrintVariantPlan`).
+
+See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for the verified matrix and probe details.
 
 ## Sample project
 

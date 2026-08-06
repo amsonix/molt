@@ -1,5 +1,6 @@
 package io.github.amsonix.molt.internal.resource
 
+import io.github.amsonix.molt.internal.keep.KeepXmlParser
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -37,6 +38,34 @@ class ResourceObfuscatorTest {
         val renamed = result.xmlRenameMapping.getValue("layout/player")
         assertTrue(File(output, "layout-night/$renamed.xml").isFile)
         assertFalse(File(output, "layout/$renamed.xml").exists())
+    }
+
+    @Test
+    fun obfuscateResTree_keepsDeclaredLayoutWhileRenamingOthers() = withResourceTree { input, output ->
+        File(input, "layout/base.xml").apply {
+            parentFile.mkdirs()
+            writeText("<FrameLayout />")
+        }
+        File(input, "layout/google.xml").writeText("<FrameLayout />")
+
+        val keepRules = KeepXmlParser.parseKeepXml(
+            """
+            <resources xmlns:tools="http://schemas.android.com/tools"
+                tools:keep="@layout/base" />
+            """.trimIndent(),
+        )
+
+        val result = ResourceObfuscator.obfuscateResTree(
+            inputResDir = input,
+            outputResDir = output,
+            keepRules = keepRules,
+            config = config(renameXmlFiles = true, imageAntiDetect = false),
+        )
+
+        assertTrue(File(output, "layout/base.xml").isFile)
+        assertFalse(File(output, "layout/google.xml").exists())
+        assertTrue(result.xmlRenameMapping.containsKey("layout/google"))
+        assertFalse(result.xmlRenameMapping.containsKey("layout/base"))
     }
 
     @Test

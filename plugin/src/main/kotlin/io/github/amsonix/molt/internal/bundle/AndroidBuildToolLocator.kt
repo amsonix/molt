@@ -32,9 +32,28 @@ internal object AndroidBuildToolLocator {
         val executableNames = executableNames(toolName, isWindows)
         return sdkRoots(environment, userHome, isWindows)
             .asSequence()
-            .map { File(it, "build-tools") }
-            .filter(File::isDirectory)
-            .flatMap { it.listFiles().orEmpty().asSequence() }
+            .mapNotNull { root -> locateInSdk(root, toolName, isWindows, executableNames) }
+            .firstOrNull()
+    }
+
+    /** Scan a single SDK root (e.g. from [com.android.build.api.dsl.SdkComponents.sdkDirectory]). */
+    @JvmStatic
+    fun locateInSdk(sdkRoot: File, toolName: String): File? {
+        val isWindows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+        return locateInSdk(sdkRoot, toolName, isWindows, executableNames(toolName, isWindows))
+    }
+
+    internal fun locateInSdk(
+        sdkRoot: File,
+        toolName: String,
+        isWindows: Boolean,
+        executableNames: List<String>,
+    ): File? {
+        val buildTools = File(sdkRoot, "build-tools")
+        if (!buildTools.isDirectory) return null
+        return buildTools.listFiles()
+            .orEmpty()
+            .asSequence()
             .filter(File::isDirectory)
             .sortedWith(compareByDescending(BuildToolsVersionOrder) { it.name })
             .flatMap { directory -> executableNames.asSequence().map { File(directory, it) } }
