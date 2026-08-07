@@ -20,7 +20,7 @@
 
 | 项 | 值 | 说明 |
 |----|----|------|
-| 插件来源 | `includeBuild("..")` | Composite build 引用 Molt 根工程 |
+| 插件来源 | `mavenLocal()` | 当前默认；先在仓库根目录执行 `./gradlew :plugin:publishToMavenLocal`。本地开发 Molt 时推荐改为 composite：`pluginManagement { includeBuild("..") }` 并去掉 `mavenLocal()` |
 | Plugin ID | `io.github.amsonix.molt` | — |
 | keep | `library/.../res/raw/keep.xml` | 演示跨模块自动发现 |
 | 生效 BuildType | `release` | sample 仅对 release 开启 |

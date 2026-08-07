@@ -219,7 +219,9 @@ molt {
 | 路径 | 说明 |
 |------|------|
 | `build/shell-obfuscate/<variant>/component-mapping.json` | Component 改类名 mapping |
+| `build/shell-obfuscate/<variant>/component-mapping.txt` | Component 改类名报告 |
 | `build/shell-obfuscate/<variant>/view-mapping.json` | View 改类名 mapping |
+| `build/shell-obfuscate/<variant>/view-mapping.txt` | View 改类名报告 |
 | `build/shell-obfuscate/<variant>/apk-resource/resources-mapping.txt` | APK 资源表混淆 mapping |
 | `build/shell-obfuscate/<variant>/bundle-resource/resources-mapping.txt` | AAB 资源表混淆 mapping |
 | `app/build/outputs/mapping/<variant>/shell-obfuscate-mapping.txt` | **合成 mapping**（R8 + 改类名）；Crashlytics 上传目标 |
@@ -236,6 +238,8 @@ molt {
 5. **AGP 版本**：建议 8.13.x；不一致时默认 warn，可设 `failOnAgpToolchainMismatch = true` 强制 fail。
 6. **Crashlytics 接线**：生产环境可设 `failOnCrashlyticsHookFailure = true`，避免 upload 接线失败仅 warn。
 7. **Configuration Cache**：兼容 Gradle Configuration Cache；可在 `gradle.properties` 开启 `org.gradle.configuration-cache=true`（见 [COMPATIBILITY.zh-CN.md](docs/COMPATIBILITY.zh-CN.md)）。
+8. **Crashlytics 与可复现构建**：Crashlytics Gradle 插件每次构建都会重新生成 `mapping_file_id` 资源，导致 R8（资源收缩）每次重跑、增量构建失效、产物不可字节级复现。这是预期行为，每个构建自带匹配的 mapping 上传；如需字节级复现，可固定/缓存 mapping file id（如提交 `mappingFileId.txt`）或在该构建去掉 Crashlytics 插件。
+9. **mapping 对输入敏感**：改类名 mapping 由扫描的源码（app + library 模块）重新生成，**任意源码文件变化都会整体重 roll 所有改名**。不要依赖跨构建稳定的类名；始终上传同一构建产出的合成 mapping。
 
 ## 升级 AGP
 
@@ -250,7 +254,12 @@ molt {
 
 ## 示例工程
 
-仓库 `sample/` 目录提供 app + library + flavor 的最小示例：
+仓库 `sample/` 目录提供 app + library + flavor 的最小示例。
+
+**插件解析（二选一）：**
+
+- **Composite build**（推荐，在 molt 仓库内开发）：`sample/settings.gradle.kts` 使用 `pluginManagement { includeBuild("..") }`，可去掉 `mavenLocal()`。
+- **Maven Local**：先执行 `./gradlew :plugin:publishToMavenLocal`，再构建 sample（当前仓库默认方式）。
 
 ```bash
 ./gradlew -p sample :app:assembleGoogleRelease

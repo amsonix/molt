@@ -103,7 +103,7 @@ APK / AAB 内 `resources.arsc` 与 res 路径混淆。
 | `obfuscateApk` | `Boolean` | `true` | APK 资源表混淆 | ✓ |
 | `obfuscationMode` | `String` | `default` | 混淆模式：`default` / `dir` / `file` | — |
 | `mappingFile` | `File` | 自动生成 | 增量复用的 `resources-mapping.txt` | — |
-| `reuseIncrementalMapping` | `Boolean` | `true` | 自动复用上次 Transform 的 mapping | — |
+| `reuseIncrementalMapping` | `Boolean` | `true` | 自动复用上次 Transform 的 mapping。**注意**：开启时修改 `seed` **不会**重新随机化资源名（已有条目保留旧名，仅 junk / 组件 / View 名跟随新 seed）；删除 `build/shell-obfuscate/<variant>/{apk,bundle}-resource/resources-mapping.txt` 可强制全量重滚 | — |
 
 ## `componentRename { }`
 
