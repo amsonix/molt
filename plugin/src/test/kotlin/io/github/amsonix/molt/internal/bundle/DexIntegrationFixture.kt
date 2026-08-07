@@ -22,7 +22,9 @@ internal object DexIntegrationFixture {
 
     private fun sampleRoot(root: File): File? = when {
         File(root, "sample/app").isDirectory -> File(root, "sample")
-        File(root, "sample/app").isDirectory -> File(root, "sample")
+        File(root, "app").isDirectory &&
+            File(root, "library").isDirectory &&
+            File(root, "settings.gradle.kts").isFile -> root
         else -> null
     }
 

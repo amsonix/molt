@@ -211,11 +211,71 @@ object AgpTestFixture {
         return true
     }
 
-    fun findReleaseAab(projectDir: File): File? {
-        val bundleRoot = File(projectDir, "app/build/outputs/bundle")
-        if (!bundleRoot.isDirectory) return null
-        return bundleRoot.walkTopDown()
-            .firstOrNull { file -> file.isFile && file.extension == "aab" }
+    fun findReleaseAab(
+        projectDir: File,
+        agpVersion: String = DEFAULT_AGP,
+        variantName: String = "googleRelease",
+    ): File? {
+        fun isReleaseAab(file: File): Boolean =
+            file.isFile && file.extension == "aab"
+
+        val buildDir = File(projectDir, "app/build")
+        val buildType = "release"
+
+        aabOutputDirectoryCandidates(buildDir, variantName, buildType, agpVersion).forEach { dir ->
+            if (!dir.isDirectory) return@forEach
+            dir.walkTopDown().firstOrNull(::isReleaseAab)?.let { return it }
+        }
+
+        listOf(
+            File(buildDir, "intermediates/intermediary_bundle"),
+            File(buildDir, "intermediates/bundle"),
+        ).filter { it.isDirectory }.forEach { root ->
+            root.walkTopDown().firstOrNull(::isReleaseAab)?.let { return it }
+        }
+
+        File(buildDir, "outputs/bundle").takeIf { it.isDirectory }
+            ?.walkTopDown()?.firstOrNull(::isReleaseAab)?.let { return it }
+
+        return buildDir.walkTopDown()
+            .filter { file ->
+                file.isFile && file.extension == "aab" &&
+                    !file.path.contains("${File.separator}cache${File.separator}")
+            }
+            .maxByOrNull { it.lastModified() }
+    }
+
+    fun describeAabSearchPaths(projectDir: File, agpVersion: String): String {
+        val buildDir = File(projectDir, "app/build")
+        val candidates = aabOutputDirectoryCandidates(buildDir, "googleRelease", "release", agpVersion)
+        val listing = candidates.joinToString { dir ->
+            if (!dir.isDirectory) {
+                "$dir (missing)"
+            } else {
+                val names = dir.listFiles()?.map { it.name }.orEmpty()
+                "$dir -> ${names.ifEmpty { listOf("(empty)") }}"
+            }
+        }
+        return "candidates: $listing"
+    }
+
+    private fun aabOutputDirectoryCandidates(
+        buildDir: File,
+        variantName: String,
+        buildType: String,
+        agpVersion: String,
+    ): List<File> {
+        val usesSplitOutput = isAgpAtLeast(agpVersion, "8.7.0")
+        val flavor = extractFlavorSegment(variantName, buildType)
+        return buildList {
+            if (usesSplitOutput && flavor != null) {
+                add(File(buildDir, "outputs/bundle/$flavor/$buildType"))
+            }
+            add(File(buildDir, "outputs/bundle/$variantName"))
+            if (!variantName.equals(buildType, ignoreCase = true)) {
+                add(File(buildDir, "outputs/bundle/$buildType"))
+            }
+        }.distinctBy { it.absoluteFile.normalize().path }
     }
 
     fun resolveCompileSdk(sdk: File, agpVersion: String): Int {
