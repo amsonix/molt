@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace 'com.example.shell.lib'
-    compileSdk 35
+    compileSdk 33
 
     defaultConfig {
         minSdk 23

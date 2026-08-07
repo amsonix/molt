@@ -39,6 +39,11 @@ internal object DexIntegrationFixture {
         return File(root, "app/build/outputs/mapping/$variant/mapping.txt")
     }
 
+    fun apkReleaseOutputDir(root: File): File =
+        sampleRoot(root)?.let { sample ->
+            File(sample, "app/build/outputs/apk/google/release")
+        } ?: File(root, "app/build/outputs/apk/google/release")
+
     fun apkCandidate(projectRoot: File, explicitPath: String? = System.getProperty(APK_PROPERTY)): File {
         explicitPath?.takeIf(String::isNotBlank)?.let { path ->
             return File(path).let { if (it.isAbsolute) it else File(projectRoot, path) }

@@ -24,8 +24,8 @@ class DexMappingRewriteApkGeneratorTest {
             r8Mapping.takeIf { it.isFile },
         )
         val outApk = File(
-            root,
-            "app/build/outputs/apk/google/release/mapping-rewrite-07300746.apk",
+            DexIntegrationFixture.apkReleaseOutputDir(root).also { it.mkdirs() },
+            "mapping-rewrite-07300746.apk",
         )
         ZipPostR8RenameProcessor.processZip(
             unsigned,
