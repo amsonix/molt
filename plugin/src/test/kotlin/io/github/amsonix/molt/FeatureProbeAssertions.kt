@@ -30,9 +30,9 @@ object FeatureProbeAssertions {
         }
     }
 
-    fun assertAfterAab(row: FeatureProbeMatrix.Row, root: File) {
+    fun assertAfterAab(row: FeatureProbeMatrix.Row, root: File, agpVersion: String) {
         if (row.preset == "keep-verify") {
-            assertKeepVerifyAab(root)
+            assertKeepVerifyAab(root, agpVersion)
         }
     }
 
@@ -178,8 +178,8 @@ object FeatureProbeAssertions {
         }
     }
 
-    private fun assertKeepVerifyAab(root: File) {
-        val aab = AgpTestFixture.findReleaseAab(root)
+    private fun assertKeepVerifyAab(root: File, agpVersion: String) {
+        val aab = AgpTestFixture.findReleaseAab(root, agpVersion)
         assertTrue("AAB should exist for keep-verify probe", aab != null)
     }
 

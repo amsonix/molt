@@ -162,9 +162,12 @@ class AgpCompatibilityTest {
                 config,
             )
 
-            val bundleDir = File(context.projectDir, "app/build/outputs/bundle")
-            val aab = AgpTestFixture.findReleaseAab(context.projectDir)
-            assertTrue("AAB missing under $bundleDir (AGP ${config.agpVersion})", aab != null)
+            val aab = AgpTestFixture.findReleaseAab(context.projectDir, config.agpVersion)
+            assertTrue(
+                "AAB missing under app/build (AGP ${config.agpVersion}); " +
+                    AgpTestFixture.describeAabSearchPaths(context.projectDir, config.agpVersion),
+                aab != null,
+            )
             assertEquals(
                 TaskOutcome.SUCCESS,
                 result.task(":app:moltObfuscateTransformBundleGoogleRelease")?.outcome,

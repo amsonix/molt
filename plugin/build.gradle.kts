@@ -14,7 +14,7 @@ import org.gradle.plugin.devel.tasks.PluginUnderTestMetadata
 import java.util.Properties
 
 group = "io.github.amsonix.molt"
-version = providers.gradleProperty("moltVersion").orElse("1.0.0").get()
+version = providers.gradleProperty("moltVersion").orElse("1.1.0").get()
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17

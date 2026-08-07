@@ -130,7 +130,7 @@ internal object MoltObfuscateVariantWiring {
             activityCountPerPackage.set(junkConfig.activityCountPerPackage)
             excludeActivityJavaFile.set(junkConfig.excludeActivityJavaFile)
             resPrefix.set(junkConfig.resPrefix)
-            namespace.set(variant.namespace.get())
+            namespace.set(variant.namespace)
             packagePrefix.set(junkConfig.packagePrefix)
             outputDirectory.set(project.layout.buildDirectory.dir("generated/shell-obfuscate/$variantName/junk"))
         }

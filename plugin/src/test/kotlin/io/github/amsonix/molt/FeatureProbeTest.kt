@@ -156,8 +156,8 @@ class FeatureProbeTest {
                 config,
             )
 
-            assertAabTransformSuccess(result, context.projectDir, enableRename)
-            FeatureProbeAssertions.assertAfterAab(row, context.projectDir)
+            assertAabTransformSuccess(result, context.projectDir, config, enableRename)
+            FeatureProbeAssertions.assertAfterAab(row, context.projectDir, config.agpVersion)
         } finally {
             AgpTestFixture.cleanup(context)
         }
@@ -230,10 +230,16 @@ class FeatureProbeTest {
     private fun assertAabTransformSuccess(
         result: BuildResult,
         projectDir: File,
+        config: AgpTestFixture.Config,
         enableRename: Boolean,
     ) {
-        val aab = AgpTestFixture.findReleaseAab(projectDir)
-        assertTrue("AAB missing under app/build/outputs/bundle", aab != null)
+        assertEquals(TaskOutcome.SUCCESS, result.task(":app:bundleGoogleRelease")?.outcome)
+        val aab = AgpTestFixture.findReleaseAab(projectDir, config.agpVersion)
+        assertTrue(
+            "AAB missing under app/build (AGP ${config.agpVersion}); " +
+                AgpTestFixture.describeAabSearchPaths(projectDir, config.agpVersion),
+            aab != null,
+        )
         assertEquals(
             TaskOutcome.SUCCESS,
             result.task(":app:moltObfuscateTransformBundleGoogleRelease")?.outcome,

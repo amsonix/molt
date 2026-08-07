@@ -1,4 +1,5 @@
-// AGP 8.0.x 使用 Gradle 8.0 wrapper；molt 插件从 mavenLocal 解析（需先在仓库根目录执行 :plugin:publishToMavenLocal）。
+// AGP 8.0.x + Gradle 8.0 wrapper。本地开发推荐 composite：pluginManagement { includeBuild("..") }；
+// 亦可用 mavenLocal（先在仓库根目录 :plugin:publishToMavenLocal）。
 pluginManagement {
     repositories {
         mavenLocal()

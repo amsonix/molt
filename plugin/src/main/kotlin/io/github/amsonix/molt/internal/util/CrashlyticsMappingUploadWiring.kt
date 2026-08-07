@@ -17,8 +17,10 @@ internal object CrashlyticsMappingUploadWiring {
     ) {
         if (!hookEnabled) return
         val mappingFile = mergeTask.flatMap { merged -> merged.outputMapping }
-        project.tasks.configureEach {
-            if (name != uploadTaskName) return@configureEach
+
+        // Wire at task *configuration* time (not whenTaskAdded). Eager wiring during task
+        // registration breaks Crashlytics 3.x when it creates generateCrashlyticsSymbolFile*.
+        project.tasks.matching { it.name == uploadTaskName }.configureEach {
             if (!isCrashlyticsUploadMappingFileTask(this)) return@configureEach
             dependsOn(mergeTask)
             val binding = CrashlyticsUploadTaskBinding.resolve(this)

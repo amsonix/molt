@@ -10,7 +10,7 @@ internal object AgpToolchainCompatibility {
     const val MIN_AGP_FOR_AAPT2 = "8.10.1"
     const val MIN_AGP_FOR_MAPPING_ARTIFACT = "8.3.0"
     /** AAB artifact transform；8.0.2+ 矩阵 5 探针已验证。 */
-    const val MIN_AGP_FOR_BUNDLE_TRANSFORM = "8.0.0"
+    const val MIN_AGP_FOR_BUNDLE_TRANSFORM = "8.0.2"
 
     fun readAgpVersion(): String? = runCatching {
         Class.forName("com.android.Version")
