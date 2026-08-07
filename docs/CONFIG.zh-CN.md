@@ -79,7 +79,7 @@
 | `imageMicroCompressQuality` | `Float` | `0.97` | 微压缩质量（0~1） | — |
 | `imageJpegMetadataMode` | `String` | `both` | JPEG metadata 注入模式：`com` / `exif` / `both` | — |
 | `imagePngExtraChunks` | `Boolean` | `true` | PNG 追加 extra chunk | — |
-| `imagePerceptualNoise` | `Boolean` | `false` | LSB 微扰动（防 pHash 场景） | — |
+| `imagePerceptualNoise` | `Boolean` | `false` | LSB 微扰动（抗感知哈希比对） | — |
 | `verifyImageAntiDetect` | `Boolean` | `true` | overlay 阶段校验图片改写生效 | — |
 | `failOnUnchangedImageAntiDetect` | `Boolean` | `true` | 图片未改写时 fail build | — |
 | `imageAntiDetectApkFallback` | `Boolean` | `true` | APK 产物变换阶段图片 metadata 兜底 | — |

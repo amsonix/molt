@@ -79,7 +79,7 @@ Compile-time resource overlay (image rewrite, XML injection, etc.).
 | `imageMicroCompressQuality` | `Float` | `0.97` | Quality (0–1) | — |
 | `imageJpegMetadataMode` | `String` | `both` | JPEG metadata mode: `com` / `exif` / `both` | — |
 | `imagePngExtraChunks` | `Boolean` | `true` | Append PNG extra chunks | — |
-| `imagePerceptualNoise` | `Boolean` | `false` | LSB noise (anti pHash) | — |
+| `imagePerceptualNoise` | `Boolean` | `false` | LSB noise (perceptual-hash resistance) | — |
 | `verifyImageAntiDetect` | `Boolean` | `true` | Verify image rewrite during overlay | — |
 | `failOnUnchangedImageAntiDetect` | `Boolean` | `true` | Fail when image unchanged | — |
 | `imageAntiDetectApkFallback` | `Boolean` | `true` | APK transform-stage image metadata fallback | — |

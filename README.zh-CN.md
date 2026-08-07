@@ -2,7 +2,9 @@
 
 > English: [README.md](README.md)
 
-为 Android **多包 / 马甲包**场景提供构建期混淆：在常规 `assemble` / `bundle` 流程中自动注入 Junk Code、改写资源与 DEX，并输出完整 mapping。**无需额外 Gradle 任务**。
+为 Android **代码与资源**提供构建期混淆保护：在常规 `assemble` / `bundle` 流程中自动注入 Junk Code、改写资源与 DEX，并输出完整 mapping。**无需额外 Gradle 任务**。
+
+适用场景：提升逆向 / 重打包成本、防止资源被自动化提取、多渠道与白标（white-label）构建隔离。
 
 | 项 | 值 |
 |----|-----|
@@ -15,7 +17,7 @@
 
 | 能力 | 说明 |
 |------|------|
-| Junk Code | 生成 [utility 类](#术语说明) 增加 DEX 差异（`light` / `medium` / `heavy`）；可选生成 Activity，需 `activityCountPerPackage` + `mergeJunkManifest` 才写入 Manifest |
+| Junk Code | 生成 [utility 类](#术语说明) 增加 DEX 复杂度（`light` / `medium` / `heavy`）；可选生成 Activity，需 `activityCountPerPackage` + `mergeJunkManifest` 才写入 Manifest |
 | 资源 Overlay | 编译期 source set 改写图片 metadata、可选 XML 注释（打包前） |
 | 资源表混淆 | 产物打包后改写 APK/AAB 内 `resources.arsc` 与 res 路径 |
 | Component 改类名 | 将四大组件完整类名映射为随机短名（如 `SplashActivity` → `e3.gj1`），改写 DEX / Manifest |
