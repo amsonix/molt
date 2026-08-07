@@ -9,6 +9,10 @@
 - `MoltObfuscateVariantWiring`：junk 任务 `namespace` 接线改 Provider 直传（去掉 `.get()`）
 - 新增 `CrashlyticsMappingUploadWiringTest`（AGP 2.x/3.x 接线回归）
 
+### Docs
+
+- AGP 支持下限更新为 **8.0.0**：2026-08-07 单独探测 AGP 8.0.0 + Gradle 8.0（smoke / APK / AAB / rename 共 5/5 PASS）；README / COMPATIBILITY 双语同步
+
 ## 1.1.0 — 2026-08-07
 
 ### Added

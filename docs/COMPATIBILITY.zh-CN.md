@@ -6,9 +6,9 @@ English: [COMPATIBILITY.md](COMPATIBILITY.md)
 
 | 能力 | AGP 范围 |
 |------|----------|
-| 全链路（APK/AAB transform + rename） | **8.0.2 – 9.3.0** |
+| 全链路（APK/AAB transform + rename） | **8.0.0 – 9.3.0** |
 
-2026-08-06 本地矩阵：**18 档 × 5 探针 = 90/90 PASS**。
+2026-08-06 本地矩阵：**18 档 × 5 探针 = 90/90 PASS**；另 2026-08-07 单独验证 **AGP 8.0.0（5/5 PASS）**。
 
 ## 运行探测
 

@@ -9,7 +9,7 @@ Build-time obfuscation for Android **multi-package / white-label** apps: inject 
 | Plugin ID | `io.github.amsonix.molt` |
 | Extension | `molt { }` |
 | Version | `1.1.0` |
-| Requirements | AGP **8.0.2 – 9.3.x** (probed) · [probe report](docs/COMPATIBILITY.md) |
+| Requirements | AGP **8.0.0 – 9.3.x** (probed) · [probe report](docs/COMPATIBILITY.md) |
 
 ## What it does
 
