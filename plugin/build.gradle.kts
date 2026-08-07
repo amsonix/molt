@@ -156,8 +156,8 @@ gradlePlugin {
             implementationClass = "io.github.amsonix.molt.MoltObfuscatePlugin"
             displayName = "Molt"
             description =
-                "Android vest-pack obfuscation: junk code, resource overlay, arsc, post-R8 component/view rename."
-            tags.set(listOf("android", "obfuscation", "vest", "molt"))
+                "Android build-time code & resource obfuscation: junk code, resource overlay, arsc, post-R8 component/view rename."
+            tags.set(listOf("android", "obfuscation", "protection", "molt"))
         }
     }
 }

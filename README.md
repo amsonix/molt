@@ -1,6 +1,8 @@
 # Molt Gradle Plugin
 
-Build-time obfuscation for Android **multi-package / white-label** apps: inject junk code, rewrite resources and DEX during normal `assemble` / `bundle`, and emit a merged mapping file. **No extra Gradle tasks required.**
+Build-time obfuscation for Android code & resources: inject junk code, rewrite resources and DEX during normal `assemble` / `bundle`, and emit a merged mapping file. **No extra Gradle tasks required.**
+
+Use cases: raise the cost of reverse engineering / repackaging, protect resources from automated extraction, and isolate multi-channel or white-label builds.
 
 中文文档：[README.zh-CN.md](README.zh-CN.md)
 
@@ -15,7 +17,7 @@ Build-time obfuscation for Android **multi-package / white-label** apps: inject 
 
 | Feature | Description |
 |---------|-------------|
-| Junk Code | Generates [utility classes](#glossary) to vary DEX (`light` / `medium` / `heavy`); optional Activities require `activityCountPerPackage` + `mergeJunkManifest` to register in the Manifest |
+| Junk Code | Generates [utility classes](#glossary) to add DEX complexity (`light` / `medium` / `heavy`); optional Activities require `activityCountPerPackage` + `mergeJunkManifest` to register in the Manifest |
 | Resource overlay | Rewrites image metadata and optional XML comments at compile time (pre-packaging source set) |
 | Resource table obfuscation | Rewrites `resources.arsc` and `res` paths inside APK/AAB after packaging |
 | Component rename | Maps four component types to random short FQCNs (e.g. `SplashActivity` → `e3.gj1`); patches DEX / Manifest |
