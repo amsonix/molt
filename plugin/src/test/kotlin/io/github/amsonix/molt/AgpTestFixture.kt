@@ -338,6 +338,13 @@ object AgpTestFixture {
             ?.takeIf { isProbeJavaHomeForGradle(it, config.gradleVersion) }
             ?.let { return it }
 
+        // GitHub Actions / CI 通用：标准 JAVA_HOME（setup-java 等）。此前只找 mac 路径导致 ubuntu 上 Gradle 8.0–8.4 探针必挂。
+        System.getenv("JAVA_HOME")
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::File)
+            ?.takeIf { isProbeJavaHomeForGradle(it, config.gradleVersion) }
+            ?.let { return it }
+
         androidStudioJbrHomes()
             .firstOrNull { isProbeJavaHomeForGradle(it, config.gradleVersion) }
             ?.let { return it }
