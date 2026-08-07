@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-（暂无）
+### Fixed（1.1.0 发布后工作区改动，未提交；将随下一版本发布）
+
+- Crashlytics upload 接线改为任务配置期 `matching` 匹配：**eager wiring 在 task 注册期会破坏 Crashlytics 3.x**（`generateCrashlyticsSymbolFile*` 创建时序）
+- `AgpToolchainCompatibility.MIN_AGP_FOR_BUNDLE_TRANSFORM` 修正为 **8.0.2**（与兼容矩阵下限一致）
+- `MoltObfuscateVariantWiring`：junk 任务 `namespace` 接线改 Provider 直传（去掉 `.get()`）
+- 新增 `CrashlyticsMappingUploadWiringTest`（AGP 2.x/3.x 接线回归）
 
 ## 1.1.0 — 2026-08-07
 

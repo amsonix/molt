@@ -237,6 +237,8 @@ Run `./gradlew :app:moltPrintVariantPlan` to print flags and paths for each vari
 5. **AGP version**: 8.13.x recommended; mismatch warns by default, or set `failOnAgpToolchainMismatch = true` to fail the build.
 6. **Crashlytics hook**: set `failOnCrashlyticsHookFailure = true` in production if upload wiring must not silently skip.
 7. **Configuration Cache**: compatible with Gradle Configuration Cache; enable `org.gradle.configuration-cache=true` in `gradle.properties` (see [COMPATIBILITY.md](docs/COMPATIBILITY.md)).
+8. **Crashlytics + reproducibility**: the Crashlytics Gradle plugin regenerates a new `mapping_file_id` resource on every build, which re-triggers R8 (resource shrinking) and therefore invalidates incrementality and makes artifacts non-byte-reproducible. This is expected; each build ships its own matching upload. If you need byte-reproducible builds, pin/cache the mapping file id (e.g. commit `mappingFileId.txt`) or drop the Crashlytics plugin for those builds.
+9. **Mapping is input-sensitive**: the rename mapping is regenerated from scanned sources (app + library modules). Any source file change re-rolls *all* renamed names — do not rely on stable class names across builds; always upload the merged mapping produced by the same build.
 
 ## Upgrading AGP
 
@@ -251,7 +253,12 @@ See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for the verified matrix and p
 
 ## Sample project
 
-The `sample/` directory contains a minimal app + library + flavor setup:
+The `sample/` directory contains a minimal app + library + flavor setup.
+
+**Plugin resolution (pick one):**
+
+- **Composite build** (recommended for molt repo development): in `sample/settings.gradle.kts`, use `pluginManagement { includeBuild("..") }` and drop `mavenLocal()`.
+- **Maven Local**: publish first with `./gradlew :plugin:publishToMavenLocal`, then build sample (current default in repo).
 
 ```bash
 ./gradlew -p sample :app:assembleGoogleRelease

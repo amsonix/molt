@@ -79,7 +79,7 @@ Preset = 在 `AgpTestFixture.writeFixture` 之上的 **声明式覆盖**（`Feat
 |------------|----------|
 | F01-overlay-rename | generated res 中 `google.xml` 被 rename；`base.xml` 因 keep 保留 |
 | F02-overlay-images | overlay 日志 / 图片 hash 变化 |
-| F03-junk-activity | merged manifest 含 junk Activity；DEX 含 junk 类 |
+| F04-junk-activity | merged manifest 含 junk Activity；DEX 含 junk 类 |
 | F07/F08 arsc-* | `resources-mapping.txt` 非空；mode 特定 entry |
 | F11-keep-verify | 验包 task 无 fail；关键 `@layout/` 仍在 APK |
 | F13-baseline-sync | `baseline.profm` 产物更新 |

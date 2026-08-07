@@ -103,7 +103,7 @@ Obfuscates `resources.arsc` and `res` paths inside APK/AAB.
 | `obfuscateApk` | `Boolean` | `true` | APK resource table obfuscation | ✓ |
 | `obfuscationMode` | `String` | `default` | Mode: `default` / `dir` / `file` | — |
 | `mappingFile` | `File` | auto | Reusable `resources-mapping.txt` | — |
-| `reuseIncrementalMapping` | `Boolean` | `true` | Reuse mapping from last transform | — |
+| `reuseIncrementalMapping` | `Boolean` | `true` | Reuse mapping from last transform. **Note**: with reuse enabled, changing `seed` does **not** re-roll resource names (existing entries keep their old names; only junk / component / view names follow the new seed). Delete `build/shell-obfuscate/<variant>/{apk,bundle}-resource/resources-mapping.txt` to force a full re-roll | — |
 
 ## `componentRename { }`
 
