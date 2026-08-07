@@ -6,7 +6,7 @@ Supported **AGP range is probed**, not assumed. Run `./tools/agp-compat.sh` and 
 
 ## Verified range
 
-**Full pipeline (5 probes): AGP 8.0.2 – 9.3.0** — 18 matrix rows × 5 probes = **90/90 PASS** (2026-08-06, local).
+**Full pipeline (5 probes): AGP 8.0.0 – 9.3.0** — matrix rows 8.0.2 – 9.3.0 = 18 × 5 = **90/90 PASS** (2026-08-06, local); AGP **8.0.0** verified separately **5/5 PASS** (2026-08-07, local).
 
 ## Probe matrix (18 versions)
 
