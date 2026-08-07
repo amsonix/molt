@@ -8,6 +8,7 @@
 - `AgpToolchainCompatibility.MIN_AGP_FOR_BUNDLE_TRANSFORM` 修正为 **8.0.2**（与兼容矩阵下限一致）
 - `MoltObfuscateVariantWiring`：junk 任务 `namespace` 接线改 Provider 直传（去掉 `.get()`）
 - 新增 `CrashlyticsMappingUploadWiringTest`（AGP 2.x/3.x 接线回归）
+- 修复 CI（ubuntu）探针必挂：`AgpTestFixture.probeJavaHome` 搜索链漏掉标准 `JAVA_HOME`（此前仅 macOS 路径），Gradle 8.0–8.4 行在 GitHub Actions 上报 `IllegalStateException`
 
 ### Docs
 
