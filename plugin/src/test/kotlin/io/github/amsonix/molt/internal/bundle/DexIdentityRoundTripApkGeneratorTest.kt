@@ -19,10 +19,8 @@ class DexIdentityRoundTripApkGeneratorTest {
     fun generateIdentityRoundTripApk() {
         val root = IntegrationTestAssumptions.projectRoot()
         val unsigned = IntegrationTestAssumptions.assumeIntegrationApk(root)
-        val outApk = File(
-            root,
-            "app/build/outputs/apk/google/release/identity-roundtrip-${unsigned.nameWithoutExtension}.apk",
-        )
+        val outDir = DexIntegrationFixture.apkReleaseOutputDir(root).also { it.mkdirs() }
+        val outApk = File(outDir, "identity-roundtrip-${unsigned.nameWithoutExtension}.apk")
         ZipFile(unsigned).use { zipIn ->
             ZipOutputStream(FileOutputStream(outApk)).use { zipOut ->
                 zipIn.entries().asIterator().forEach { entry ->

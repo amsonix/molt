@@ -126,6 +126,8 @@ dependencies {
     // compileOnly：避免 Java 21 的 8.13 proto 进入发布 classpath（Gradle 8.0 / AGP 8.0 宿主无法加载）。
     // 运行时由宿主 AGP 传递依赖提供；bundle/apk transform 需 AGP ≥ 8.0.2。
     compileOnly("com.android.tools.build:aapt2-proto:8.13.2-14304508")
+    // 单元测试直接构建 com.android.aapt.Resources；不进 pluginUnderTestMetadata runtime。
+    testImplementation("com.android.tools.build:aapt2-proto:8.13.2-14304508")
     implementation("com.google.guava:guava:32.1.3-jre")
     implementation("commons-io:commons-io:2.15.1")
     implementation("commons-codec:commons-codec:1.16.0")
@@ -253,6 +255,7 @@ private val moltPluginTaskNames = setOf(
     "quickDexVerify",
     "dexComponentRenameIntegrationTest",
     "dexMappingRewriteApkGeneratorTest",
+    "dexIdentityRoundTripApkGeneratorTest",
     "moltObfuscateAgpCompatTest",
     "moltObfuscateAgpCompatE2eTest",
     "moltObfuscateAgpCompatBundleE2eTest",
@@ -455,6 +458,7 @@ tasks.register<JavaExec>("quickDexVerify") {
 tasks.named<Test>("test") {
     exclude("**/DexComponentRenameIntegrationTest.class")
     exclude("**/DexMappingRewriteApkGeneratorTest.class")
+    exclude("**/DexIdentityRoundTripApkGeneratorTest.class")
 }
 
 tasks.register<Test>("dexComponentRenameIntegrationTest") {
@@ -490,6 +494,17 @@ tasks.register<Test>("dexMappingRewriteApkGeneratorTest") {
     classpath = sourceSets.test.get().runtimeClasspath
     filter.includeTestsMatching(
         "io.github.amsonix.molt.internal.bundle.DexMappingRewriteApkGeneratorTest",
+    )
+    systemProperty("molt.integrationVariant", integrationVariant())
+}
+
+tasks.register<Test>("dexIdentityRoundTripApkGeneratorTest") {
+    description = "Generate identity round-trip APK for device verification (requires integration APK)"
+    dependsOn("testClasses")
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching(
+        "io.github.amsonix.molt.internal.bundle.DexIdentityRoundTripApkGeneratorTest",
     )
     systemProperty("molt.integrationVariant", integrationVariant())
 }
