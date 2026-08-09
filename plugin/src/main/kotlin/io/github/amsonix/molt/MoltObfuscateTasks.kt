@@ -11,6 +11,7 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.PathSensitive
@@ -26,7 +27,6 @@ import java.io.File
 
 @CacheableTask
 abstract class MoltObfuscateWriteDescriptorTask : DefaultTask() {
-
     @get:Internal
     abstract val moduleDirectory: DirectoryProperty
 
@@ -227,6 +227,42 @@ abstract class MoltObfuscateMergeMappingTask : DefaultTask() {
 
     private fun loadMappingJson(property: RegularFileProperty): RenameMapping =
         RenameMapping.fromJson(property.get().asFile.readText())
+}
+
+@CacheableTask
+abstract class MoltObfuscateGenerateFogTask : DefaultTask() {
+
+    @get:Input
+    abstract val seed: Property<Int>
+
+    @get:Input
+    abstract val applicationId: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    init {
+        group = "molt"
+        description = "Generate string decryption helper class (Fog)"
+    }
+
+    @TaskAction
+    fun generate() {
+        val javaDir = File(outputDirectory.get().asFile, "java")
+        javaDir.mkdirs()
+        val packageDir = File(
+            javaDir,
+            io.github.amsonix.molt.internal.bundle.DexStringEncryptor
+                .fogPackagePrefix(applicationId.get()).replace('.', '/'),
+        )
+        packageDir.mkdirs()
+        File(packageDir, "Fog.java").writeText(
+            io.github.amsonix.molt.internal.bundle.DexStringEncryptor.buildFogSource(
+                applicationId = applicationId.get(),
+                key = io.github.amsonix.molt.internal.bundle.DexStringEncryptor.deriveKey(seed.get()),
+            ),
+        )
+    }
 }
 
 internal data class ModuleScanDescriptor(

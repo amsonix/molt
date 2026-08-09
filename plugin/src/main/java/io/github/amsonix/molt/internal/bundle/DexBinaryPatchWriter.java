@@ -30,7 +30,7 @@ final class DexBinaryPatchWriter {
     }
 
     static byte[] patch(byte[] input, RenameMapping mapping) throws IOException {
-        return patch(input, mapping, Collections.emptySet());
+        return patch(input, mapping, Collections.emptySet(), null);
     }
 
     static byte[] patch(
@@ -38,14 +38,26 @@ final class DexBinaryPatchWriter {
             RenameMapping mapping,
             Set<String> publicClassDescriptors
     ) throws IOException {
-        if (mapping.entries().isEmpty() && publicClassDescriptors.isEmpty()) {
+        return patch(input, mapping, publicClassDescriptors, null);
+    }
+
+    static byte[] patch(
+            byte[] input,
+            RenameMapping mapping,
+            Set<String> publicClassDescriptors,
+            DexStringEncryptionConfig stringConfig
+    ) throws IOException {
+        if (mapping.entries().isEmpty()
+                && publicClassDescriptors.isEmpty()
+                && stringConfig == null) {
             return input;
         }
 
         DexBackedDexFile dexFile = openDex(input);
         DexTypeRewriter typeRewriter = new DexTypeRewriter(mapping);
         if (!anyTypeNeedsRewrite(dexFile, typeRewriter)
-                && !containsClassToPublicize(dexFile, publicClassDescriptors)) {
+                && !containsClassToPublicize(dexFile, publicClassDescriptors)
+                && !containsEncryptableClass(dexFile, stringConfig)) {
             return input;
         }
 
@@ -63,12 +75,31 @@ final class DexBinaryPatchWriter {
                     && !AccessFlags.PUBLIC.isSet(rewritten.getAccessFlags())) {
                 rewritten = publicClassDef(rewritten);
             }
+            if (stringConfig != null
+                    && DexStringEncryptor.INSTANCE.shouldEncryptClass(classDef.getType(), stringConfig)) {
+                rewritten = DexStringEncryptor.INSTANCE.rewriteClassStrings(rewritten, stringConfig);
+            }
             pool.internClass(rewritten);
         }
 
         MemoryDataStore store = new MemoryDataStore();
         pool.writeTo(store);
         return store.getData();
+    }
+
+    private static boolean containsEncryptableClass(
+            DexBackedDexFile dexFile,
+            DexStringEncryptionConfig stringConfig
+    ) {
+        if (stringConfig == null) {
+            return false;
+        }
+        for (ClassDef classDef : dexFile.getClasses()) {
+            if (DexStringEncryptor.INSTANCE.shouldEncryptClass(classDef.getType(), stringConfig)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean anyTypeNeedsRewrite(

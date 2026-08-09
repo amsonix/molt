@@ -49,4 +49,8 @@ molt {
     viewRename.enabled.set(true)
     allowUnsignedOutput.set(true)
     syncBaselineProfile.set(false)
+    stringEncrypt.enabled.set(true)
+    assetsProtect.enabled.set(true)
+    assetsProtect.filePatterns.set(['*.json'])
+    assetsProtect.junkFileCount.set(2)
 }

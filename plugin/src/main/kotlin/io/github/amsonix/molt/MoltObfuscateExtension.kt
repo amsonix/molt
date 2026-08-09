@@ -143,6 +143,14 @@ abstract class MoltObfuscateExtension @Inject constructor(
     val viewRename: ViewRenameExtension =
         project.objects.newInstance(ViewRenameExtension::class.java)
 
+    /** post-R8 DEX 字符串加密（const-string → Fog 解密调用）。 */
+    val stringEncrypt: StringEncryptExtension =
+        project.objects.newInstance(StringEncryptExtension::class.java)
+
+    /** APK/AAB assets 轻量扰动（假字段/注释 + seed 派生假文件）。 */
+    val assetsProtect: AssetsProtectExtension =
+        project.objects.newInstance(AssetsProtectExtension::class.java)
+
     /** post-R8 DEX 改写后按 HRF + 合成 mapping 重编 baseline.prof / baseline.profm。 */
     val syncBaselineProfile: Property<Boolean> =
         project.objects.property(Boolean::class.java).convention(true)
@@ -223,6 +231,12 @@ abstract class MoltObfuscateVariantConfig @Inject constructor(
 
     val viewRename: ViewRenameVariantOverrideExtension =
         objects.newInstance(ViewRenameVariantOverrideExtension::class.java)
+
+    val stringEncrypt: StringEncryptVariantOverrideExtension =
+        objects.newInstance(StringEncryptVariantOverrideExtension::class.java)
+
+    val assetsProtect: AssetsProtectVariantOverrideExtension =
+        objects.newInstance(AssetsProtectVariantOverrideExtension::class.java)
 }
 
 /** variantConfig { create("googleRelease") { junkCode { profile.set("heavy") } } } */
@@ -273,6 +287,57 @@ abstract class ComponentRenameVariantOverrideExtension @Inject constructor(
 }
 
 abstract class ViewRenameVariantOverrideExtension @Inject constructor(
+    private val project: org.gradle.api.Project,
+) {
+    val enabled: Property<Boolean> = project.objects.property(Boolean::class.java)
+}
+
+/** post-R8 DEX 字符串加密 DSL。 */
+abstract class StringEncryptExtension @Inject constructor(
+    private val project: org.gradle.api.Project,
+) {
+    /** 总开关；默认 true。默认仅加密工程包（projectPackagePrefixes）内的类。 */
+    val enabled: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /** 类名 glob（按 original 名匹配）；匹配的类整体不加密。默认 `*.debug.*`。 */
+    val excludePatterns: ListProperty<String> = project.objects.listProperty(String::class.java).convention(
+        listOf("*.debug.*"),
+    )
+
+    /** 字符串内容正则白名单；匹配的字符串不加密（如反射目标、SDK 约定格式）。 */
+    val keepStrings: ListProperty<String> = project.objects.listProperty(String::class.java)
+}
+
+abstract class StringEncryptVariantOverrideExtension @Inject constructor(
+    private val project: org.gradle.api.Project,
+) {
+    val enabled: Property<Boolean> = project.objects.property(Boolean::class.java)
+}
+
+internal data class ResolvedStringEncryptSettings(
+    val enabled: Boolean,
+)
+
+/** APK/AAB assets 轻量扰动 DSL。 */
+abstract class AssetsProtectExtension @Inject constructor(
+    private val project: org.gradle.api.Project,
+) {
+    /** 总开关；默认 false（需显式开启并配置 [filePatterns]）。 */
+    val enabled: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
+    /** 参与扰动的文件名 glob（`*.json` 等）；含 `/` 的 pattern 按完整 entry 路径匹配。 */
+    val filePatterns: ListProperty<String> = project.objects.listProperty(String::class.java).convention(
+        listOf("*.json", "*.txt", "*.properties"),
+    )
+
+    /** 注入的假文件数量。 */
+    val junkFileCount: Property<Int> = project.objects.property(Int::class.java).convention(3)
+
+    /** 跳过扰动的文件名/路径 glob。 */
+    val excludePatterns: ListProperty<String> = project.objects.listProperty(String::class.java)
+}
+
+abstract class AssetsProtectVariantOverrideExtension @Inject constructor(
     private val project: org.gradle.api.Project,
 ) {
     val enabled: Property<Boolean> = project.objects.property(Boolean::class.java)
@@ -460,6 +525,8 @@ internal fun MoltObfuscateExtension.resolveVariantSettings(
         globalObfuscateApk = bundleResourceObfuscate.obfuscateApk.get(),
         globalComponentRenameEnabled = componentRename.enabled.get(),
         globalViewRenameEnabled = viewRename.enabled.get(),
+        globalStringEncryptEnabled = stringEncrypt.enabled.get(),
+        globalAssetsProtectEnabled = assetsProtect.enabled.get(),
         variantResourceObfuscateEnabled = override?.resourceObfuscate?.enabled?.optional(),
         variantVerifyApkKeep = override?.verify?.verifyApkKeep?.optional(),
         variantVerifyBundleKeep = override?.verify?.verifyBundleKeep?.optional(),
@@ -467,5 +534,7 @@ internal fun MoltObfuscateExtension.resolveVariantSettings(
         variantObfuscateApk = override?.bundleResourceObfuscate?.obfuscateApk?.optional(),
         variantComponentRenameEnabled = override?.componentRename?.enabled?.optional(),
         variantViewRenameEnabled = override?.viewRename?.enabled?.optional(),
+        variantStringEncryptEnabled = override?.stringEncrypt?.enabled?.optional(),
+        variantAssetsProtectEnabled = override?.assetsProtect?.enabled?.optional(),
     )
 }

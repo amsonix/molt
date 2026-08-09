@@ -135,6 +135,21 @@ internal object MoltObfuscateVariantWiring {
             outputDirectory.set(project.layout.buildDirectory.dir("generated/shell-obfuscate/$variantName/junk"))
         }
 
+        if (variantSettings.stringEncryptEnabled) {
+            val fogTask = project.tasks.register<MoltObfuscateGenerateFogTask>(
+                "moltObfuscateGenerateFog$capitalized",
+            ) {
+                this.seed.set(seed)
+                applicationId.set(variantApplicationId)
+                outputDirectory.set(
+                    project.layout.buildDirectory.dir("generated/shell-obfuscate/$variantName/fog"),
+                )
+            }
+            variant.sources.java?.addGeneratedSourceDirectory(fogTask) { task ->
+                project.objects.directoryProperty().value(task.outputDirectory.dir("java"))
+            }
+        }
+
         if (junkConfig.mergeJunkManifest && junkConfig.activityCountPerPackage > 0) {
             val mergeManifestTask =
                 project.tasks.register<MoltObfuscateMergeJunkManifestTask>(
@@ -238,7 +253,10 @@ internal object MoltObfuscateVariantWiring {
             capitalized,
         )
 
-        if (variantSettings.bundleResourceObfuscateEnabled) {
+        if (variantSettings.bundleResourceObfuscateEnabled ||
+            variantSettings.stringEncryptEnabled ||
+            variantSettings.assetsProtectEnabled
+        ) {
             val agpVersion = AgpToolchainCompatibility.readAgpVersion()
             if (agpVersion != null &&
                 !AgpToolchainCompatibility.isAgpAtLeast(
@@ -308,6 +326,14 @@ internal object MoltObfuscateVariantWiring {
                 if (variantSettings.componentRenameEnabled || variantSettings.viewRenameEnabled) {
                     mergedObfuscationMapping.set(mergeTask.flatMap { merged -> merged.outputMapping })
                 }
+                stringEncryptEnabled.set(variantSettings.stringEncryptEnabled)
+                stringEncryptExcludePatterns.set(extension.stringEncrypt.excludePatterns)
+                stringEncryptKeepStrings.set(extension.stringEncrypt.keepStrings)
+                fogDescriptor.set(io.github.amsonix.molt.internal.bundle.DexStringEncryptor.fogDescriptor(variant.applicationId.get()))
+                assetsProtectEnabled.set(variantSettings.assetsProtectEnabled)
+                assetsProtectFilePatterns.set(extension.assetsProtect.filePatterns)
+                assetsProtectJunkFileCount.set(extension.assetsProtect.junkFileCount)
+                assetsProtectExcludePatterns.set(extension.assetsProtect.excludePatterns)
                 signing.storeFile?.let(signingStoreFile::set)
                 signingStorePassword.set(signing.storePassword.orEmpty())
                 signingKeyAlias.set(signing.keyAlias.orEmpty())
@@ -321,7 +347,10 @@ internal object MoltObfuscateVariantWiring {
                 .toTransform(SingleArtifact.BUNDLE)
         }
 
-        if (variantSettings.obfuscateApk) {
+        if (variantSettings.obfuscateApk ||
+            variantSettings.stringEncryptEnabled ||
+            variantSettings.assetsProtectEnabled
+        ) {
             MoltObfuscateApkListingSeed.seedIfAbsent(project, variant)
             val apkTask = project.tasks.register<MoltObfuscateTransformApkTask>(
                 "moltObfuscateTransformApk$capitalized",
@@ -369,6 +398,14 @@ internal object MoltObfuscateVariantWiring {
                 if (variantSettings.componentRenameEnabled || variantSettings.viewRenameEnabled) {
                     mergedObfuscationMapping.set(mergeTask.flatMap { merged -> merged.outputMapping })
                 }
+                stringEncryptEnabled.set(variantSettings.stringEncryptEnabled)
+                stringEncryptExcludePatterns.set(extension.stringEncrypt.excludePatterns)
+                stringEncryptKeepStrings.set(extension.stringEncrypt.keepStrings)
+                fogDescriptor.set(io.github.amsonix.molt.internal.bundle.DexStringEncryptor.fogDescriptor(variant.applicationId.get()))
+                assetsProtectEnabled.set(variantSettings.assetsProtectEnabled)
+                assetsProtectFilePatterns.set(extension.assetsProtect.filePatterns)
+                assetsProtectJunkFileCount.set(extension.assetsProtect.junkFileCount)
+                assetsProtectExcludePatterns.set(extension.assetsProtect.excludePatterns)
                 wireIncrementalMappingInputs(
                     project = project,
                     collection = incrementalMappingFiles,

@@ -82,22 +82,33 @@ public final class DexInPlaceRenameEngine {
 
     public static byte[] remapBytes(byte[] input, RenameMapping mapping, DexRewritePlan rewritePlan)
             throws IOException {
-        if (mapping.entries().isEmpty()) {
+        return remapBytes(input, mapping, rewritePlan, null);
+    }
+
+    public static byte[] remapBytes(
+            byte[] input,
+            RenameMapping mapping,
+            DexRewritePlan rewritePlan,
+            DexStringEncryptionConfig stringConfig
+    ) throws IOException {
+        boolean needsRename = !mapping.entries().isEmpty();
+        boolean needsEncrypt = stringConfig != null;
+        if (!needsRename && !needsEncrypt) {
             return input;
         }
         DexRewritePlan plan = rewritePlan;
         if (plan == null) {
             DexFile dexFile = openDex(input);
-            plan = DexSyntheticCompanionExtender.extend(dexFile, mapping);
+            plan = needsRename
+                    ? DexSyntheticCompanionExtender.extend(dexFile, mapping)
+                    : new DexRewritePlan(mapping, Collections.emptySet());
         }
         RenameMapping rewriteMapping = plan.getMapping();
-        if (rewriteMapping.entries().isEmpty()) {
-            return input;
-        }
         return DexBinaryPatchWriter.patch(
                 input,
                 rewriteMapping,
-                plan.getPublicClassDescriptors()
+                plan.getPublicClassDescriptors(),
+                stringConfig
         );
     }
 
