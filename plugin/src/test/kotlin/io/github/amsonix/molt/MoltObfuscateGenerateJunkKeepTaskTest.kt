@@ -19,6 +19,8 @@ class MoltObfuscateGenerateJunkKeepTaskTest {
             ).get()
             task.junkEnabled.set(true)
             task.packagePrefix.set("sample.custom.junk")
+            task.fogEnabled.set(false)
+            task.fogPackagePrefix.set("sample.custom.fog")
             task.outputFile.set(project.layout.buildDirectory.file("junk-keep.pro"))
 
             task.generate()
@@ -40,11 +42,14 @@ class MoltObfuscateGenerateJunkKeepTaskTest {
             ).get()
             task.junkEnabled.set(false)
             task.packagePrefix.set("sample.custom.junk")
+            task.fogEnabled.set(true)
+            task.fogPackagePrefix.set("sample.custom.fog")
             task.outputFile.set(project.layout.buildDirectory.file("junk-keep.pro"))
 
             task.generate()
 
-            assertFalse(task.outputFile.get().asFile.readText().contains("-keep class"))
+            assertTrue(task.outputFile.get().asFile.readText().contains("sample.custom.fog.Fog"))
+            assertFalse(task.outputFile.get().asFile.readText().contains("-keep class sample.custom.junk"))
         } finally {
             root.deleteRecursively()
         }

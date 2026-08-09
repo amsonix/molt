@@ -217,7 +217,7 @@ internal object ImageMetadataAntiDetectProcessor {
 
     private fun hasPngShellMetadata(bytes: ByteArray): Boolean {
         if (!hasPngSignature(bytes)) return false
-        if (hasPngChunk(bytes, "sObf")) return true
+        if (hasPngChunk(bytes, PNG_SHELL_CHUNK_FOURCC)) return true
         return bytes.indexOfSubArray(SHELL_PNG_TEXT_MARKER) >= 0
     }
 
@@ -271,7 +271,7 @@ internal object ImageMetadataAntiDetectProcessor {
                 )
             }
             chunks += buildPngChunk(
-                "sObf",
+                PNG_SHELL_CHUNK_FOURCC,
                 token.encodeToByteArray().copyOf(minOf(32, token.length.coerceAtLeast(1))),
             )
         }
@@ -658,6 +658,12 @@ internal object ImageMetadataAntiDetectProcessor {
     private const val VP8X_FLAG_ANIMATION = 0x10
 
     private const val WEBP_SHELL_CHUNK_FOURCC = "sObf"
+
+    /**
+     * PNG 私有 chunk 名。PNG 规范要求 chunk 名第 3 字符（reserved bit）必须大写；
+     * libpng 1.6.47+ 会严格校验（bad header (invalid type)），因此不能用 "sObf"。
+     */
+    private const val PNG_SHELL_CHUNK_FOURCC = "sOBf"
 
     private val SHELL_PNG_TEXT_MARKER = "shell\u0000".encodeToByteArray()
     private val SHELL_JPEG_MARKER = "shell-obfuscate-".encodeToByteArray()

@@ -689,14 +689,18 @@ object AgpTestFixture {
     }
 
     fun writeLauncherActivity(root: File) {
-        write(
-            root,
-            "app/src/main/java/fixture/app/MainActivity.java",
-            """
-            package fixture.app;
-            public class MainActivity extends android.app.Activity {}
-            """.trimIndent(),
-        )
+        // 幂等：preset 可能已定制 MainActivity（如 string-fog-assets 的 marker），不得覆盖。
+        val mainActivity = File(root, "app/src/main/java/fixture/app/MainActivity.java")
+        if (!mainActivity.isFile) {
+            write(
+                root,
+                "app/src/main/java/fixture/app/MainActivity.java",
+                """
+                package fixture.app;
+                public class MainActivity extends android.app.Activity {}
+                """.trimIndent(),
+            )
+        }
         File(root, "app/src/main/AndroidManifest.xml").writeText(
             """
             <manifest xmlns:android="http://schemas.android.com/apk/res/android">

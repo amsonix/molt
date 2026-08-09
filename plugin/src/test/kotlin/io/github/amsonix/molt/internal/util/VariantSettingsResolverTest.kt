@@ -17,12 +17,15 @@ class VariantSettingsResolverTest {
             globalObfuscateApk = true,
             globalComponentRenameEnabled = true,
             globalViewRenameEnabled = false,
+            globalStringEncryptEnabled = true,
+            globalAssetsProtectEnabled = false,
         )
         assertTrue(resolved.resourceObfuscateEnabled)
         assertFalse(resolved.verifyApkKeep)
         assertTrue(resolved.verifyBundleKeep)
         assertTrue(resolved.componentRenameEnabled)
         assertFalse(resolved.viewRenameEnabled)
+        assertTrue(resolved.stringEncryptEnabled)
     }
 
     @Test
@@ -35,11 +38,15 @@ class VariantSettingsResolverTest {
             globalObfuscateApk = true,
             globalComponentRenameEnabled = true,
             globalViewRenameEnabled = true,
+            globalStringEncryptEnabled = true,
+            globalAssetsProtectEnabled = true,
             variantResourceObfuscateEnabled = false,
             variantVerifyApkKeep = false,
             variantObfuscateApk = false,
             variantComponentRenameEnabled = false,
             variantViewRenameEnabled = false,
+            variantStringEncryptEnabled = false,
+            variantAssetsProtectEnabled = false,
         )
         assertFalse(resolved.resourceObfuscateEnabled)
         assertFalse(resolved.verifyApkKeep)
@@ -47,5 +54,7 @@ class VariantSettingsResolverTest {
         assertFalse(resolved.obfuscateApk)
         assertFalse(resolved.componentRenameEnabled)
         assertFalse(resolved.viewRenameEnabled)
+        assertFalse(resolved.stringEncryptEnabled)
+        assertFalse(resolved.assetsProtectEnabled)
     }
 }

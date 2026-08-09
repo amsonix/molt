@@ -12,6 +12,8 @@ object FeatureProbeMatrix {
         APK_RENAME,
         AAB_RENAME,
         ALL,
+        /** 真机/模拟器运行时冒烟（安装 + 启动 + Fog 解密断言）；无设备自动跳过。 */
+        RUNTIME,
         /** 真实 sample 工程；由 `feature-probe.sh` / `moltObfuscateSampleAssemble` 执行。 */
         SAMPLE,
         /** 宿主 integration root；由 `feature-probe.sh` / `moltObfuscateIntegrationPrepare` 执行。 */
@@ -26,6 +28,7 @@ object FeatureProbeMatrix {
                 "apk-rename" -> APK_RENAME
                 "aab-rename" -> AAB_RENAME
                 "all" -> ALL
+                "runtime" -> RUNTIME
                 "sample" -> SAMPLE
                 "integration" -> INTEGRATION
                 else -> error("Unknown feature probe type: $raw")

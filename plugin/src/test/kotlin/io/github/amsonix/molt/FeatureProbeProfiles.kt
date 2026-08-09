@@ -25,6 +25,7 @@ object FeatureProbeProfiles {
             "variant-config" -> applyVariantConfig(root)
             "shrink-keep" -> applyShrinkKeep(root)
             "rename-full" -> applyRenameFull(root)
+            "string-fog-assets" -> applyStringFogAssets(root)
             else -> error("Unknown feature probe preset: $preset")
         }
     }
@@ -159,6 +160,48 @@ object FeatureProbeProfiles {
             syncBaselineProfile.set(false)
             allowUnsignedOutput.set(true)
             """.trimIndent(),
+        )
+    }
+
+    private fun applyStringFogAssets(root: File) {
+        // 标记字符串：非标识符形态才会被加密。
+        AgpTestFixture.write(
+            root,
+            "app/src/main/java/fixture/app/MainActivity.java",
+            """
+            package fixture.app;
+            public class MainActivity extends android.app.Activity {
+                public static String marker() {
+                    return "molt fog probe marker";
+                }
+                @Override
+                protected void onCreate(android.os.Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                    android.util.Log.i("MoltProbe", marker());
+                }
+            }
+            """.trimIndent(),
+        )
+        AgpTestFixture.write(
+            root,
+            "app/src/main/assets/probe_config.json",
+            """{"api": "https://probe.example.com", "key": "v1"}""",
+        )
+        appendMoltBlock(
+            root,
+            """
+            stringEncrypt.enabled.set(true)
+            assetsProtect.enabled.set(true)
+            assetsProtect.filePatterns.set(['*.json'])
+            assetsProtect.junkFileCount.set(1)
+            bundleResourceObfuscate.enabled.set(true)
+            bundleResourceObfuscate.obfuscateApk.set(true)
+            allowUnsignedOutput.set(true)
+            """.trimIndent(),
+        )
+        // 确保 marker()/onCreate 不被 R8 shrink：字符串必须存活才能验证加密（根治 F16 假阳性）。
+        File(root, "app/proguard-rules.pro").appendText(
+            "\n-keep class fixture.app.MainActivity { *; }\n",
         )
     }
 
