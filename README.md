@@ -22,6 +22,8 @@ Use cases: raise the cost of reverse engineering / repackaging, protect resource
 | Resource table obfuscation | Rewrites `resources.arsc` and `res` paths inside APK/AAB after packaging |
 | Component rename | Maps four component types to random short FQCNs (e.g. `SplashActivity` → `e3.gj1`); patches DEX / Manifest |
 | View rename | Replaces custom View FQCNs in layouts |
+| String encryption | Post-R8 DEX `const-string` → `Fog.d(...)` decrypt calls (project packages, seed-derived key) |
+| Assets perturbation | Injects junk fields / comments / seed-derived junk files into `assets/` (APK + AAB) |
 | Mapping merge | Merges R8, resource, and rename mappings for Crashlytics upload |
 | Baseline Profile | Recompiles `baseline.prof` / `baseline.profm` using the merged mapping |
 | Keep verification | Optional check that kept resources were not obfuscated |
@@ -275,5 +277,6 @@ See [sample/README.md](sample/README.md).
 | [docs/CONFIG.md](docs/CONFIG.md) | Full configuration reference |
 | [README.zh-CN.md](README.zh-CN.md) | Chinese documentation |
 | [sample/README.md](sample/README.md) | Integration sample |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Roadmap / backlog |
 | [plugin/CHANGELOG.md](plugin/CHANGELOG.md) | Release notes |
 | [plugin/README.md](plugin/README.md) | Plugin development & publishing |

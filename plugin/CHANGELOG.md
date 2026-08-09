@@ -10,6 +10,20 @@
 - 新增 `CrashlyticsMappingUploadWiringTest`（AGP 2.x/3.x 接线回归）
 - 修复 CI（ubuntu）探针必挂：`AgpTestFixture.probeJavaHome` 搜索链漏掉标准 `JAVA_HOME`（此前仅 macOS 路径），Gradle 8.0–8.4 行在 GitHub Actions 上报 `IllegalStateException`
 
+### Added
+
+- **字符串加密**（`stringEncrypt { }`）：R8 完成后 DEX 级 `const-string` → `Fog.d` 解密调用，默认仅加密工程包类；内置安全过滤（类名/描述符/标识符/路径不加密）+ `excludePatterns` / `keepStrings` 白名单；密钥由 `seed` 派生、相同明文相同密文（保留字符串池去重）；自动生成 `{applicationId}.shell.fog.Fog` 解密类并注入 keep 规则；APK/AAB 双 transform 共用同一趟 dexlib2 重建
+
+- **assets 保护**（`assetsProtect { }`）：APK/AAB 产物阶段对 `assets/` 轻量扰动——JSON 对象注入假字段、XML 形态文本追加注释、注入 seed 派生假文件；无运行时改动、不加密；二进制自动跳过；`filePatterns` / `excludePatterns` / `junkFileCount` 可配，支持 variant 覆盖
+
+- Feature probe 新增 `F16-string-fog-assets`（gate 档，apk-rename）与 `F17-string-fog-aab`（nightly）：fixture 开启 stringEncrypt + assetsProtect，断言 DEX 明文残留为 0、Fog 类存在、assets JSON 注入假字段、假文件注入
+- 修复：`minifyEnabled=false` 工程（AGP 矩阵 APK/AAB E2E fixture）因 stringEncrypt 默认开启而**构建失败**——字符串加密同 rename 属 post-R8 能力，R8 mapping 缺失时改为 **warn+跳过**（不再硬 error）
+- 修复：stringEncrypt / assetsProtect 仅开启而不开资源混淆时 transform 不注册导致**静默不生效**——transform 注册条件纳入两者开关
+
+- Feature probe 新增 **F19-runtime-smoke**（nightly，真机/模拟器）：安装 APK → 启动 → 轮询断言 Fog 解密明文出现在 logcat + 进程存活 + 无 FATAL；无设备自动跳过（CI 由 emulator job 执行）；已实机验证 **API 24 / 25 / 28 / 37**
+- 修复 `configureApk/AabTransformFixture` 末尾 `writeLauncherActivity` **无条件覆盖 preset 定制的 MainActivity**（导致 marker 被抹掉、F19 假失败）——改为幂等（已存在则跳过）
+- 修复 feature probe fixture：marker 字符串由「从未调用的静态方法」改为 onCreate 中真实打印——此前 F16 的「明文残留 0」可能因 R8 shrink 掉未用代码而**假阳性**
+
 ### Docs
 
 - AGP 支持下限更新为 **8.0.0**：2026-08-07 单独探测 AGP 8.0.0 + Gradle 8.0（smoke / APK / AAB / rename 共 5/5 PASS）；README / COMPATIBILITY 双语同步

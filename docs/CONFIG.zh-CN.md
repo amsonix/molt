@@ -105,6 +105,31 @@ APK / AAB 内 `resources.arsc` 与 res 路径混淆。
 | `mappingFile` | `File` | 自动生成 | 增量复用的 `resources-mapping.txt` | — |
 | `reuseIncrementalMapping` | `Boolean` | `true` | 自动复用上次 Transform 的 mapping。**注意**：开启时修改 `seed` **不会**重新随机化资源名（已有条目保留旧名，仅 junk / 组件 / View 名跟随新 seed）；删除 `build/shell-obfuscate/<variant>/{apk,bundle}-resource/resources-mapping.txt` 可强制全量重滚 | — |
 
+## `stringEncrypt { }`
+
+R8 完成后对 DEX 做字符串加密：`const-string` 替换为 `Fog.d(...)` 解密调用（`const-string-jumbo` 密文 + `invoke-static` + `move-result-object`，复用同一寄存器）。默认仅加密**工程包**（`projectPackagePrefixes`）内的字符串；自动生成的 `{applicationId}.shell.fog.Fog` 解密类由生成的 ProGuard keep 规则保活。
+
+**内置安全过滤：** 类全名、dex 描述符（`L...;`）、纯标识符、含 `/` 的字符串（路径/URL）一律不加密——反射、Intent 组件名等不受影响。真实工程请结合 `keepStrings` 迭代并做运行时验证。
+
+| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
+|------|------|--------|------|----------------|
+| `enabled` | `Boolean` | `true` | 字符串加密开关 | ✓ |
+| `excludePatterns` | `List<String>` | `*.debug.*` | 类 FQCN glob（按 original 名匹配），命中的类整体不加密 | — |
+| `keepStrings` | `List<String>` | 空 | 字符串内容正则白名单，命中的字符串保持明文 | — |
+
+密钥由 `seed` 派生；相同明文 → 相同密文（保留 dex 字符串池去重）。注意：开启 Crashlytics 时每次构建的 mapping file id 不同，产物不可字节级复现（见 README 注意事项 8）。
+
+## `assetsProtect { }`
+
+产物阶段对 `assets/` 做轻量扰动（APK `assets/`、AAB `base/assets/`）：JSON 对象注入假字段、XML 形态文本追加注释、注入 seed 派生的假文件（`assets/molt_junk_<seed>/`）。**无运行时改动、不加密**——破坏内容/结构指纹同时保证读取方零影响。二进制与非文本文件一律不动；JSON 注入仅对结构合法对象生效（子串级操作，不解析）。
+
+| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
+|------|------|--------|------|----------------|
+| `enabled` | `Boolean` | `false` | assets 扰动开关 | ✓ |
+| `filePatterns` | `List<String>` | `*.json`, `*.txt`, `*.properties` | 参与扰动的文件名 glob；含 `/` 的 pattern 按完整 entry 路径匹配 | — |
+| `junkFileCount` | `Int` | `3` | 注入的假文件数量 | — |
+| `excludePatterns` | `List<String>` | 空 | 跳过的文件名/路径 glob | — |
+
 ## `componentRename { }`
 
 R8 完成后，将 Manifest / layout / navigation 等引用的组件完整类名（FQCN）映射为随机短名，并 patch DEX。
@@ -159,5 +184,7 @@ variantConfig {
 | `resourceObfuscate` | `enabled`, `renameXmlFiles`, `injectXmlJunk`, `imageAntiDetect`, `imagePngMicroCompress`, `imageJpegMicroCompress`, `incrementalOverlay` |
 | `bundleResourceObfuscate` | `enabled`, `obfuscateApk` |
 | `componentRename` | `enabled` |
+| `stringEncrypt` | `enabled` |
+| `assetsProtect` | `enabled` |
 | `viewRename` | `enabled` |
 | `verify` | `verifyApkKeep`, `verifyBundleKeep` |
