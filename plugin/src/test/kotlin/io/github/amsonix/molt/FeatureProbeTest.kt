@@ -39,6 +39,7 @@ class FeatureProbeTest {
             FeatureProbeMatrix.ProbeType.AAB -> runAabProbe(row, config, sdk, enableRename = false)
             FeatureProbeMatrix.ProbeType.APK_RENAME -> runApkProbe(row, config, sdk, enableRename = true)
             FeatureProbeMatrix.ProbeType.AAB_RENAME -> runAabProbe(row, config, sdk, enableRename = true)
+            FeatureProbeMatrix.ProbeType.RUNTIME -> runRuntimeProbe(row, config, sdk)
             FeatureProbeMatrix.ProbeType.ALL -> {
                 runSmokeProbe(row, config, sdk)
                 runApkProbe(row, config, sdk, enableRename = false)
@@ -162,6 +163,112 @@ class FeatureProbeTest {
             AgpTestFixture.cleanup(context)
         }
     }
+
+    private fun runRuntimeProbe(
+        row: FeatureProbeMatrix.Row,
+        config: AgpTestFixture.Config,
+        sdk: File,
+    ) {
+        assumeTransformE2e(row)
+        val adb = resolveAdb() ?: run {
+            assumeTrue("adb not found for runtime probe (${row.featureId})", false)
+            return
+        }
+        val deviceOnline = runCatching {
+            exec(adb!!, "devices").lineSequence().any { it.endsWith("\tdevice") }
+        }.getOrDefault(false)
+        assumeTrue(
+            "no connected Android device for runtime probe (${row.featureId})",
+            deviceOnline,
+        )
+
+        val context = AgpTestFixture.newRunContext(config)
+        try {
+            AgpTestFixture.writeFixture(context, sdk)
+            FeatureProbeProfiles.apply(context.projectDir, row.preset)
+            configureTransformFixture(context.projectDir, row, enableRename = true, apk = true)
+            // 产物需可安装：fixture 默认 unsigned（allowUnsignedOutput），补 debug 签名。
+            val appGradle = File(context.projectDir, "app/build.gradle")
+            appGradle.writeText(
+                appGradle.readText().replace(
+                    "release {",
+                    "release {\n                        signingConfig signingConfigs.debug",
+                ),
+            )
+
+            val result = AgpTestFixture.build(
+                AgpTestFixture.createRunner(context).withArguments(
+                    *AgpTestFixture.defaultProbeBuildArgs(
+                        ":app:assembleGoogleRelease",
+                        AgpTestFixture.CRASHLYTICS_ASSERT_AFTER_MERGE,
+                    ),
+                ),
+                config,
+            )
+            assertApkTransformSuccess(result, context.projectDir, config, enableRename = true)
+            val apk = AgpTestFixture.findReleaseApk(context.projectDir, config.agpVersion)
+            assertTrue("APK missing for runtime probe", apk != null)
+
+            exec(adb, "logcat", "-c")
+            val installOut = exec(adb, "install", "-r", apk!!.absolutePath)
+            assertTrue("adb install must succeed: $installOut", installOut.contains("Success"))
+
+            val pkg = "fixture.app"
+            val activity = resolveLauncherActivity(adb, pkg)
+            assertTrue("launcher activity must resolve", activity != null)
+
+            val startOut = exec(adb, "shell", "am", "start", "-W", "-n", "$pkg/$activity")
+            var logcat = ""
+            for (attempt in 1..15) {
+                Thread.sleep(1000)
+                logcat = exec(adb, "logcat", "-d")
+                if (logcat.contains("MoltProbe") && logcat.contains("molt fog probe marker")) break
+            }
+            val crash = exec(adb, "logcat", "-d", "-b", "crash")
+            val pidof = exec(adb, "shell", "pidof", pkg).trim()
+            val diagnostic = buildString {
+                appendLine("start=$startOut")
+                appendLine("processAlive=${pidof.isNotEmpty()}")
+                appendLine("crash=$crash")
+                appendLine("logcatTail=")
+                append(logcat.lineSequence().toList().takeLast(40).joinToString("\n"))
+            }
+            assertTrue(
+                "Fog.decrypt must print plaintext marker at runtime (string encryption round-trip).\n$diagnostic",
+                logcat.contains("molt fog probe marker"),
+            )
+            assertTrue("no FATAL crash on ${row.featureId}", !crash.contains("FATAL"))
+            assertTrue("app process must stay alive (pidof=$pidof)", pidof.isNotEmpty())
+        } finally {
+            AgpTestFixture.cleanup(context)
+            runCatching { exec(adb, "uninstall", "fixture.app") }
+        }
+    }
+
+    private fun resolveAdb(): String? {
+        val home = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+        if (home != null) {
+            val candidate = File(home, "platform-tools/adb")
+            if (candidate.isFile) return candidate.absolutePath
+        }
+        val onPath = runCatching {
+            ProcessBuilder("adb", "version").start().waitFor() == 0
+        }.getOrDefault(false)
+        return if (onPath) "adb" else null
+    }
+
+    private fun resolveLauncherActivity(adb: String, pkg: String): String? =
+        exec(adb, "shell", "cmd", "package", "resolve-activity", "--brief", pkg)
+            .lineSequence()
+            .lastOrNull { it.contains('/') && !it.contains("=") }
+            ?.substringAfter('/')
+
+    private fun exec(adb: String, vararg args: String): String = runCatching {
+        val process = ProcessBuilder(listOf(adb) + args).redirectErrorStream(true).start()
+        val out = process.inputStream.bufferedReader().readText()
+        process.waitFor()
+        out
+    }.getOrDefault("")
 
     private fun configureTransformFixture(
         root: File,

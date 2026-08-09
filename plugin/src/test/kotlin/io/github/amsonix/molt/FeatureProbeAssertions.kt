@@ -40,6 +40,9 @@ object FeatureProbeAssertions {
         if (row.featureId == "F13-baseline-sync") {
             assertBaselineSyncApk(root)
         }
+        if (row.featureId == "F16-string-fog-assets") {
+            assertStringFogAssets(root)
+        }
         val shellMapping = File(root, "app/build/outputs/mapping/googleRelease/shell-obfuscate-mapping.txt")
         assertTrue("merged mapping should exist after rename APK probe", shellMapping.isFile)
     }
@@ -181,6 +184,46 @@ object FeatureProbeAssertions {
     private fun assertKeepVerifyAab(root: File, agpVersion: String) {
         val aab = AgpTestFixture.findReleaseAab(root, agpVersion)
         assertTrue("AAB should exist for keep-verify probe", aab != null)
+    }
+
+    private fun assertStringFogAssets(root: File) {
+        val apk = File(root, "app/build").walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".apk") && !it.name.startsWith("mapping-rewrite-") }
+            .maxWithOrNull(compareBy(File::lastModified))
+        assertTrue("transformed APK should exist for string-fog-assets probe", apk != null)
+        java.util.zip.ZipFile(apk!!).use { zf ->
+            val dexBytes = java.io.ByteArrayOutputStream().apply {
+                zf.entries().asSequence()
+                    .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
+                    .forEach { entry -> zf.getInputStream(entry).use { write(it.readBytes()) } }
+            }.toByteArray()
+            assertFalse(
+                "plaintext marker must be encrypted out of DEX",
+                dexBytes.containsBytes("molt fog probe marker".encodeToByteArray()),
+            )
+            assertTrue(
+                "Fog decryption class must be present",
+                dexBytes.containsBytes("Lfixture/app/shell/fog/Fog;".encodeToByteArray()),
+            )
+            val json = zf.getInputStream(zf.getEntry("assets/probe_config.json"))
+                .use { it.readBytes().decodeToString() }
+            assertTrue("assets json must gain a junk field", json.contains("molt_"))
+            assertTrue(
+                "seed-derived junk assets files must be injected",
+                zf.entries().asSequence().any { it.name.startsWith("assets/molt_junk_") },
+            )
+        }
+    }
+
+    private fun ByteArray.containsBytes(needle: ByteArray): Boolean {
+        if (needle.isEmpty() || needle.size > size) return false
+        outer@ for (start in 0..size - needle.size) {
+            for (offset in needle.indices) {
+                if (this[start + offset] != needle[offset]) continue@outer
+            }
+            return true
+        }
+        return false
     }
 
     private fun assertBaselineSyncApk(root: File) {

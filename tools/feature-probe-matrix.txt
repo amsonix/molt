@@ -12,6 +12,7 @@ F01-overlay-rename    overlay-rename  smoke        8.13.2  8.13  gate       1
 F05-arsc-apk          default         apk          8.13.2  8.13  gate       1
 F06-arsc-aab          default         aab          8.13.2  8.13  gate       1
 F09-rename-apk        rename-full     apk-rename   8.13.2  8.13  gate       1
+F16-string-fog-assets string-fog-assets apk-rename   8.13.2  8.13  gate       1
 
 # --- nightly only (compile-time / overlay) ---
 F02-overlay-images    overlay-images  smoke        8.13.2  8.13  nightly    0
@@ -27,6 +28,8 @@ F10-rename-aab        rename-full     aab-rename   8.13.2  8.13  nightly    0
 F11-keep-verify-apk   keep-verify     apk          8.13.2  8.13  nightly    0
 F12-keep-verify-aab   keep-verify     aab          8.13.2  8.13  nightly    0
 F13-baseline-sync     baseline-sync   apk-rename   8.13.2  8.13  nightly    0
+F17-string-fog-aab    string-fog-assets aab-rename   8.13.2  8.13  nightly    0
+F19-runtime-smoke     string-fog-assets runtime      8.13.2  8.13  nightly    0
 
 # --- cross-agp (9.3.0 bookend; weekly / release) ---
 F00-baseline          default         all          9.3.0   9.5   cross-agp  0
