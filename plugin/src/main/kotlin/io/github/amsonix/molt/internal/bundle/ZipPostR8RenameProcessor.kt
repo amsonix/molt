@@ -32,6 +32,8 @@ internal object ZipPostR8RenameProcessor {
         val projectPackagePrefixes: List<String> = emptyList(),
         /** glob：匹配 zip entry 名则跳过 layout XML 改写与残留类名校验。 */
         val excludeResXmlEntryPatterns: List<String> = emptyList(),
+        /** post-R8 DEX 字符串加密；null = 关闭。 */
+        val stringEncrypt: DexStringEncryptionConfig? = null,
     )
 
     data class Result(
@@ -63,21 +65,32 @@ internal object ZipPostR8RenameProcessor {
         val viewMapping = config.viewMapping?.takeIf { it.entries().isNotEmpty() }
         val dexMapping = mergeDexMapping(componentMapping, viewMapping)
         val resourceXmlMapping = mergeDexMapping(componentMapping, viewMapping)
+        val stringEncrypt = config.stringEncrypt
+        val dexWorkEnabled = dexMapping != null || stringEncrypt != null
 
-        if (dexMapping == null && componentMapping == null && viewMapping == null) {
+        if (!dexWorkEnabled && componentMapping == null && viewMapping == null) {
             input.copyTo(output, overwrite = true)
             return Result(0, 0, 0)
         }
 
-        val dexEntries = if (dexMapping != null) loadDexEntries(input) else emptyMap()
-        val dexRewritePlan = if (dexMapping != null) {
-            buildDexRewritePlan(dexEntries.values.toList(), dexMapping, config.projectPackagePrefixes)
+        val dexEntries = if (dexWorkEnabled) loadDexEntries(input) else emptyMap()
+        val dexRewritePlan = if (dexWorkEnabled) {
+            buildDexRewritePlan(
+                dexEntries.values.toList(),
+                dexMapping ?: RenameMapping.fromForward(emptyMap()),
+                config.projectPackagePrefixes,
+            )
         } else {
             null
         }
-        val patchedDexEntries = if (dexMapping != null && dexRewritePlan != null) {
+        val patchedDexEntries = if (dexWorkEnabled && dexRewritePlan != null) {
             dexEntries.mapValues { (_, bytes) ->
-                DexInPlaceRenameEngine.remapBytes(bytes, dexMapping, dexRewritePlan)
+                DexInPlaceRenameEngine.remapBytes(
+                    bytes,
+                    dexMapping ?: RenameMapping.fromForward(emptyMap()),
+                    dexRewritePlan,
+                    stringEncrypt,
+                )
             }
         } else {
             emptyMap()
@@ -93,7 +106,7 @@ internal object ZipPostR8RenameProcessor {
             ZipOutputStream(BufferedOutputStream(FileOutputStream(output))).use { zipOut ->
                 zipIn.entries().asSequence().forEach { entry ->
                     when {
-                        dexMapping != null && dexRewritePlan != null && DEX_ENTRY.matches(entry.name) -> {
+                        dexWorkEnabled && dexRewritePlan != null && DEX_ENTRY.matches(entry.name) -> {
                             val patchedBytes = patchedDexEntries[entry.name]
                                 ?: throw IllegalStateException("missing patched dex for ${entry.name}")
                             val originalBytes = zipIn.getInputStream(entry).use { it.readBytes() }

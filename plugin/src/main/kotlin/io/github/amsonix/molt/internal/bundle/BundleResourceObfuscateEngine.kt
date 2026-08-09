@@ -26,6 +26,7 @@ internal object BundleResourceObfuscateEngine {
         val signing: SigningConfigSnapshot,
         val componentMapping: RenameMapping? = null,
         val viewMapping: RenameMapping? = null,
+        val stringEncrypt: DexStringEncryptionConfig? = null,
         val axmlStrictMode: Boolean = false,
         val projectPackagePrefixes: List<String> = emptyList(),
         val excludeResXmlEntryPatterns: List<String> = emptyList(),
@@ -37,6 +38,7 @@ internal object BundleResourceObfuscateEngine {
         val failOnBaselineProfileSyncFailure: Boolean = true,
         val baselineProfileHumanReadable: File? = null,
         val obfuscationMapping: File? = null,
+        val assetsProtect: AssetsProtectionConfig? = null,
     )
 
     data class Result(
@@ -78,8 +80,11 @@ internal object BundleResourceObfuscateEngine {
             axmlStrictMode = config.axmlStrictMode,
             projectPackagePrefixes = config.projectPackagePrefixes,
             excludeResXmlEntryPatterns = config.excludeResXmlEntryPatterns,
+            stringEncrypt = config.stringEncrypt,
         )
-        val postR8Ran = postR8Config.componentMapping != null || postR8Config.viewMapping != null
+        val postR8Ran = postR8Config.componentMapping != null ||
+            postR8Config.viewMapping != null ||
+            postR8Config.stringEncrypt != null
         if (postR8Ran) {
             val postR8Result = ZipPostR8RenameProcessor.processZipInPlace(config.outputAab, postR8Config)
             dexFiles = postR8Result.dexFiles
@@ -107,6 +112,10 @@ internal object BundleResourceObfuscateEngine {
         if (patchedImages > 0) {
             java.util.logging.Logger.getLogger(BundleResourceObfuscateEngine::class.java.name)
                 .info("AAB image metadata fallback patched=$patchedImages")
+        }
+
+        config.assetsProtect?.let { assetsConfig ->
+            AssetsProtectionEngine.patchZipInPlace(config.outputAab, assetsConfig)
         }
 
         if (config.signing.isComplete) {

@@ -21,12 +21,17 @@ import org.gradle.work.DisableCachingByDefault
 import com.android.build.api.artifact.ArtifactTransformationRequest
 import com.android.build.api.variant.BuiltArtifact
 import io.github.amsonix.molt.internal.bundle.ApkResourceObfuscateEngine
+import io.github.amsonix.molt.internal.bundle.AssetsProtectionConfig
+import io.github.amsonix.molt.internal.bundle.AssetsProtectionEngine
 import io.github.amsonix.molt.internal.bundle.ApkSignerHelper
 import io.github.amsonix.molt.internal.bundle.ApkZipAligner
 import io.github.amsonix.molt.internal.bundle.BundleResourceObfuscateEngine
 import io.github.amsonix.molt.internal.bundle.KeepWhitelistConverter
 import io.github.amsonix.molt.internal.bundle.SigningConfigSnapshot
 import io.github.amsonix.molt.internal.bundle.MoltObfuscateBaselineProfileSync
+import io.github.amsonix.molt.internal.bundle.DexStringEncryptionConfig
+import io.github.amsonix.molt.internal.bundle.DexStringEncryptor
+import io.github.amsonix.molt.internal.bundle.StringEncryptConfigFactory
 import io.github.amsonix.molt.internal.bundle.MoltObfuscateTransformVerify
 import io.github.amsonix.molt.internal.bundle.ZipPostR8RenameProcessor
 import io.github.amsonix.molt.internal.keep.KeepXmlParser
@@ -161,6 +166,30 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val mergedObfuscationMapping: RegularFileProperty
 
+    @get:Input
+    abstract val stringEncryptEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val stringEncryptExcludePatterns: org.gradle.api.provider.ListProperty<String>
+
+    @get:Input
+    abstract val stringEncryptKeepStrings: org.gradle.api.provider.ListProperty<String>
+
+    @get:Input
+    abstract val fogDescriptor: Property<String>
+
+    @get:Input
+    abstract val assetsProtectEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val assetsProtectFilePatterns: org.gradle.api.provider.ListProperty<String>
+
+    @get:Input
+    abstract val assetsProtectJunkFileCount: Property<Int>
+
+    @get:Input
+    abstract val assetsProtectExcludePatterns: org.gradle.api.provider.ListProperty<String>
+
     init {
         group = "molt"
     }
@@ -185,6 +214,7 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
                 signing = signing,
                 componentMapping = postR8Config.componentMapping,
                 viewMapping = postR8Config.viewMapping,
+                stringEncrypt = postR8Config.stringEncrypt,
                 axmlStrictMode = axmlStrictMode.get(),
                 projectPackagePrefixes = projectPackagePrefixes.get(),
                 excludeResXmlEntryPatterns = excludeResXmlEntryPatterns.get(),
@@ -196,6 +226,17 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
                 failOnBaselineProfileSyncFailure = failOnBaselineProfileSyncFailure.get(),
                 baselineProfileHumanReadable = baselineProfileHumanReadable.orNull?.asFile,
                 obfuscationMapping = mergedObfuscationMapping.orNull?.asFile,
+                assetsProtect = if (assetsProtectEnabled.get()) {
+                    AssetsProtectionConfig(
+                        seed = bundleImageSeed.get(),
+                        filePatterns = assetsProtectFilePatterns.get(),
+                        junkFileCount = assetsProtectJunkFileCount.get(),
+                        excludePatterns = assetsProtectExcludePatterns.get(),
+                        assetsPrefix = "base/assets/",
+                    )
+                } else {
+                    null
+                },
             ),
         )
         verifyBundleKeepIfEnabled(
@@ -267,6 +308,32 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
             axmlStrictMode = axmlStrictMode.get(),
             projectPackagePrefixes = projectPackagePrefixes.get(),
             excludeResXmlEntryPatterns = excludeResXmlEntryPatterns.get(),
+            stringEncrypt = buildStringEncryptConfig(bundleImageSeed.get()),
+        )
+    }
+
+    private fun buildStringEncryptConfig(seedValue: Int): DexStringEncryptionConfig? {
+        if (!stringEncryptEnabled.get()) return null
+        val r8Mapping = r8MappingFile.orNull?.asFile?.takeIf { it.isFile }
+        if (r8Mapping == null) {
+            logger.warn(
+                "$name: stringEncrypt enabled but R8 mapping missing " +
+                    "(minifyEnabled=false?); skip string encryption",
+            )
+            return null
+        }
+        val prefixes = projectPackagePrefixes.get()
+        return DexStringEncryptionConfig(
+            fogDescriptor = fogDescriptor.get(),
+            key = DexStringEncryptor.deriveKey(seedValue),
+            encryptableR8Types = StringEncryptConfigFactory.buildEncryptableR8Types(
+                r8MappingFile = r8Mapping,
+                projectPackagePrefixes = prefixes,
+                excludeClassPatterns = stringEncryptExcludePatterns.get(),
+            ),
+            projectPackagePrefixes = prefixes,
+            excludeClassPatterns = stringEncryptExcludePatterns.get(),
+            keepStrings = stringEncryptKeepStrings.get().map(::Regex),
         )
     }
 
@@ -415,6 +482,30 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val mergedObfuscationMapping: RegularFileProperty
 
+    @get:Input
+    abstract val stringEncryptEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val stringEncryptExcludePatterns: org.gradle.api.provider.ListProperty<String>
+
+    @get:Input
+    abstract val stringEncryptKeepStrings: org.gradle.api.provider.ListProperty<String>
+
+    @get:Input
+    abstract val fogDescriptor: Property<String>
+
+    @get:Input
+    abstract val assetsProtectEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val assetsProtectFilePatterns: org.gradle.api.provider.ListProperty<String>
+
+    @get:Input
+    abstract val assetsProtectJunkFileCount: Property<Int>
+
+    @get:Input
+    abstract val assetsProtectExcludePatterns: org.gradle.api.provider.ListProperty<String>
+
     init {
         group = "molt"
     }
@@ -490,6 +581,18 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
             obfuscationMapping = mergedObfuscationMapping.orNull?.asFile,
             failOnSyncFailure = failOnBaselineProfileSyncFailure.get(),
         )
+        if (assetsProtectEnabled.get()) {
+            AssetsProtectionEngine.patchZipInPlace(
+                unsignedOut,
+                AssetsProtectionConfig(
+                    seed = seed.get(),
+                    filePatterns = assetsProtectFilePatterns.get(),
+                    junkFileCount = assetsProtectJunkFileCount.get(),
+                    excludePatterns = assetsProtectExcludePatterns.get(),
+                    assetsPrefix = "assets/",
+                ),
+            )
+        }
         val alignedOut = File(workDir, "aligned.apk")
         ApkZipAligner.align(unsignedOut, alignedOut)
         alignedOut.copyTo(outputApk, overwrite = true)
@@ -556,6 +659,32 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
             axmlStrictMode = axmlStrictMode.get(),
             projectPackagePrefixes = projectPackagePrefixes.get(),
             excludeResXmlEntryPatterns = excludeResXmlEntryPatterns.get(),
+            stringEncrypt = buildStringEncryptConfig(seed.get()),
+        )
+    }
+
+    private fun buildStringEncryptConfig(seedValue: Int): DexStringEncryptionConfig? {
+        if (!stringEncryptEnabled.get()) return null
+        val r8Mapping = r8MappingFile.orNull?.asFile?.takeIf { it.isFile }
+        if (r8Mapping == null) {
+            logger.warn(
+                "$name: stringEncrypt enabled but R8 mapping missing " +
+                    "(minifyEnabled=false?); skip string encryption",
+            )
+            return null
+        }
+        val prefixes = projectPackagePrefixes.get()
+        return DexStringEncryptionConfig(
+            fogDescriptor = fogDescriptor.get(),
+            key = DexStringEncryptor.deriveKey(seedValue),
+            encryptableR8Types = StringEncryptConfigFactory.buildEncryptableR8Types(
+                r8MappingFile = r8Mapping,
+                projectPackagePrefixes = prefixes,
+                excludeClassPatterns = stringEncryptExcludePatterns.get(),
+            ),
+            projectPackagePrefixes = prefixes,
+            excludeClassPatterns = stringEncryptExcludePatterns.get(),
+            keepStrings = stringEncryptKeepStrings.get().map(::Regex),
         )
     }
 

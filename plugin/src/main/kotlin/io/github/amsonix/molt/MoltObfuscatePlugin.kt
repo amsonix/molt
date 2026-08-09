@@ -237,6 +237,12 @@ class MoltObfuscatePlugin : Plugin<Project> {
         ) {
             junkEnabled.set(extension.junkCode.enabled)
             packagePrefix.set(extension.junkCode.packagePrefix)
+            fogEnabled.set(extension.stringEncrypt.enabled)
+            fogPackagePrefix.convention(
+                applicationIdProvider(project, android).map(
+                    io.github.amsonix.molt.internal.bundle.DexStringEncryptor::fogPackagePrefix,
+                ),
+            )
             outputFile.set(project.layout.buildDirectory.file("shell-obfuscate/molt-junk-keep.pro"))
         }
         android.buildTypes.configureEach {
@@ -248,5 +254,9 @@ class MoltObfuscatePlugin : Plugin<Project> {
         }.configureEach {
             dependsOn(keepTask)
         }
+    }
+
+    private fun applicationIdProvider(project: Project, android: AppExtension) = project.provider {
+        android.defaultConfig.applicationId?.takeIf { it.isNotBlank() } ?: "com.example.app"
     }
 }

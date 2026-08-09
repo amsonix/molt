@@ -129,6 +129,12 @@ abstract class MoltObfuscateGenerateJunkKeepTask : DefaultTask() {
     @get:Input
     abstract val packagePrefix: Property<String>
 
+    @get:Input
+    abstract val fogEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val fogPackagePrefix: Property<String>
+
     @get:OutputFile
     abstract val outputFile: RegularFileProperty
 
@@ -146,6 +152,10 @@ abstract class MoltObfuscateGenerateJunkKeepTask : DefaultTask() {
                 appendLine("# molt: generated junk keep rules")
                 if (junkEnabled.get()) {
                     appendLine("-keep class ${packagePrefix.get()}.** { *; }")
+                }
+                if (fogEnabled.get()) {
+                    appendLine("# molt: generated fog keep rules")
+                    appendLine("-keep class ${fogPackagePrefix.get()}.Fog { *; }")
                 }
             },
         )
