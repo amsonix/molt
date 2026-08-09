@@ -22,6 +22,8 @@
 | 资源表混淆 | 产物打包后改写 APK/AAB 内 `resources.arsc` 与 res 路径 |
 | Component 改类名 | 将四大组件完整类名映射为随机短名（如 `SplashActivity` → `e3.gj1`），改写 DEX / Manifest |
 | View 改类名 | 替换 layout 中自定义 View 的完整类名 |
+| 字符串加密 | R8 完成后 DEX 内 `const-string` → `Fog.d(...)` 解密调用（工程包内，密钥由 seed 派生） |
+| assets 扰动 | 向 `assets/` 注入假字段 / 注释 / seed 派生假文件（APK + AAB） |
 | Mapping 合成 | 合并 R8、资源、改类名对照表，供 Crashlytics 上传 |
 | Baseline Profile | 按合成 mapping 重编 `baseline.prof` / `baseline.profm` |
 | Keep 验包 | 可选校验 keep 资源未被误混淆 |
@@ -276,5 +278,6 @@ molt {
 | [docs/CONFIG.zh-CN.md](docs/CONFIG.zh-CN.md) | 全部配置项参考（中文） |
 | [docs/CONFIG.md](docs/CONFIG.md) | Full config reference (English) |
 | [sample/README.md](sample/README.md) | 接入示例 |
+| [docs/ROADMAP.md](docs/ROADMAP.md)（[中文](docs/ROADMAP.zh-CN.md)） | Roadmap / Backlog |
 | [plugin/CHANGELOG.md](plugin/CHANGELOG.md) | 版本变更 |
 | [plugin/README.md](plugin/README.md) | 插件开发与发布 |

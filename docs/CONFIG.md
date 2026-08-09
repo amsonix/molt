@@ -121,6 +121,31 @@ Simple names change too — not package-only renames.
 | `enabled` | `Boolean` | `true` | Rename Activity / Service / Receiver / Provider | ✓ |
 | `excludePatterns` | `List<String>` | `*.debug.*`, `*Hilt_*`, `*_HiltModules*` | FQCN globs to skip | — |
 
+## `stringEncrypt { }`
+
+Post-R8 DEX string encryption: `const-string` is replaced with a `Fog.d(...)` decrypt call (`const-string-jumbo` ciphertext + `invoke-static` + `move-result-object`, same register). Only strings in **project packages** (`projectPackagePrefixes`) are encrypted by default; the auto-generated `{applicationId}.shell.fog.Fog` decryption class is kept via generated ProGuard rules.
+
+**Safety filters (built-in):** class-name FQCNs, dex descriptors (`L...;`), identifiers, and strings containing `/` (paths / URLs) are never encrypted, so reflection / Intent component names keep working. Iterate with `keepStrings` on real apps and verify at runtime.
+
+| Option | Type | Default | Description | Variant override |
+|--------|------|---------|-------------|------------------|
+| `enabled` | `Boolean` | `true` | String encryption switch | ✓ |
+| `excludePatterns` | `List<String>` | `*.debug.*` | Class FQCN globs to skip (matched against original names) | — |
+| `keepStrings` | `List<String>` | empty | String-content regex whitelist; matched strings stay plaintext | — |
+
+Key is derived from `seed`; identical plaintexts produce identical ciphertexts (string-pool dedup preserved). Note: with Crashlytics enabled, per-build mapping file ids make builds non-byte-reproducible (see README note 8).
+
+## `assetsProtect { }`
+
+Lightweight `assets/` perturbation at transform time (APK `assets/`, AAB `base/assets/`): injects a junk field into JSON objects, appends a comment to XML-like text files, and adds seed-derived junk files (`assets/molt_junk_<seed>/`). No runtime changes, no encryption — breaks content / structure fingerprints while keeping every reader working. Binary files and non-text files are never touched; JSON injection only fires on structurally valid objects (no parsing, substring-level).
+
+| Option | Type | Default | Description | Variant override |
+|--------|------|---------|-------------|------------------|
+| `enabled` | `Boolean` | `false` | Assets perturbation switch | ✓ |
+| `filePatterns` | `List<String>` | `*.json`, `*.txt`, `*.properties` | File-name globs to perturb; patterns containing `/` match full entry paths | — |
+| `junkFileCount` | `Int` | `3` | Number of injected junk files | — |
+| `excludePatterns` | `List<String>` | empty | File-name / path globs to skip | — |
+
 ## `viewRename { }`
 
 After R8, renames custom View classes in layout / navigation XML (system / AndroidX widgets unchanged).
@@ -159,5 +184,7 @@ variantConfig {
 | `resourceObfuscate` | `enabled`, `renameXmlFiles`, `injectXmlJunk`, `imageAntiDetect`, `imagePngMicroCompress`, `imageJpegMicroCompress`, `incrementalOverlay` |
 | `bundleResourceObfuscate` | `enabled`, `obfuscateApk` |
 | `componentRename` | `enabled` |
+| `stringEncrypt` | `enabled` |
+| `assetsProtect` | `enabled` |
 | `viewRename` | `enabled` |
 | `verify` | `verifyApkKeep`, `verifyBundleKeep` |
