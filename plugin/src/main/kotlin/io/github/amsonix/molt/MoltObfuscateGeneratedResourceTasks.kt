@@ -133,13 +133,7 @@ abstract class MoltObfuscateGenerateJunkKeepTask : DefaultTask() {
     abstract val fogEnabled: Property<Boolean>
 
     @get:Input
-    abstract val fogPackagePrefix: Property<String>
-
-    @get:Input
     abstract val fogAssetsEnabled: Property<Boolean>
-
-    @get:Input
-    abstract val fogAssetsPackagePrefix: Property<String>
 
     @get:OutputFile
     abstract val outputFile: RegularFileProperty
@@ -160,13 +154,13 @@ abstract class MoltObfuscateGenerateJunkKeepTask : DefaultTask() {
                     appendLine("-keep class ${packagePrefix.get()}.** { *; }")
                 }
                 if (fogEnabled.get()) {
+                    // 类名由 seed 派生（每次构建不同）——keep 用包通配（shell.fog 为 molt 专属命名空间）。
                     appendLine("# molt: generated fog keep rules")
-                    appendLine("-keep class ${fogPackagePrefix.get()}.Fog { *; }")
+                    appendLine("-keep class **.shell.fog.* { *; }")
                 }
                 if (fogAssetsEnabled.get()) {
                     appendLine("# molt: generated fog-assets keep rules")
-                    appendLine("-keep class ${fogAssetsPackagePrefix.get()}.FogAssets { *; }")
-                    appendLine("-keep class ${fogAssetsPackagePrefix.get()}.FogAssetsInitializer { *; }")
+                    appendLine("-keep class **.shell.fogassets.* { *; }")
                 }
             },
         )

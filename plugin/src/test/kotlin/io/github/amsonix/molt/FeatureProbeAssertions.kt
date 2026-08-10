@@ -202,9 +202,11 @@ object FeatureProbeAssertions {
                 "plaintext marker must be encrypted out of DEX",
                 dexBytes.containsBytes("molt fog probe marker".encodeToByteArray()),
             )
+            val fogDescriptor =
+                io.github.amsonix.molt.internal.bundle.DexStringEncryptor.fogDescriptor("fixture.app", 7)
             assertTrue(
-                "Fog decryption class must be present",
-                dexBytes.containsBytes("Lfixture/app/shell/fog/Fog;".encodeToByteArray()),
+                "Fog decryption class must be present ($fogDescriptor)",
+                dexBytes.containsBytes(fogDescriptor.encodeToByteArray()),
             )
             val json = zf.getInputStream(zf.getEntry("assets/probe_config.json"))
                 .use { it.readBytes().decodeToString() }
@@ -253,9 +255,10 @@ object FeatureProbeAssertions {
                     .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
                     .forEach { entry -> zf.getInputStream(entry).use { write(it.readBytes()) } }
             }.toByteArray()
-            val fogDescriptor = "Lfixture/app/shell/fogassets/FogAssets;"
+            val fogDescriptor =
+                io.github.amsonix.molt.internal.bundle.FogAssetsSource.fogAssetsDescriptor("fixture.app", 7)
             assertTrue(
-                "FogAssets class must be present",
+                "FogAssets class must be present ($fogDescriptor)",
                 dexBytes.containsBytes(fogDescriptor.encodeToByteArray()),
             )
             val (fogOpenCalls, amOpenCalls, hasRead, hasMain) = analyzeOpenCalls(zf)
@@ -274,7 +277,8 @@ object FeatureProbeAssertions {
         var amOpen = 0
         var hasRead = false
         var hasMain = false
-        val fogDescriptor = "Lfixture/app/shell/fogassets/FogAssets;"
+        val fogDescriptor =
+            io.github.amsonix.molt.internal.bundle.FogAssetsSource.fogAssetsDescriptor("fixture.app", 7)
         zf.entries().asSequence()
             .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
             .forEach { entry ->
