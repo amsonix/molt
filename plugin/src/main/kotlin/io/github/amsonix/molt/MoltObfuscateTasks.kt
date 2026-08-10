@@ -256,10 +256,15 @@ abstract class MoltObfuscateGenerateFogTask : DefaultTask() {
                 .fogPackagePrefix(applicationId.get()).replace('.', '/'),
         )
         packageDir.mkdirs()
-        File(packageDir, "Fog.java").writeText(
+        val fogSeed = seed.get()
+        File(
+            packageDir,
+            io.github.amsonix.molt.internal.bundle.DexStringEncryptor.fogClassName(fogSeed) + ".java",
+        ).writeText(
             io.github.amsonix.molt.internal.bundle.DexStringEncryptor.buildFogSource(
                 applicationId = applicationId.get(),
-                key = io.github.amsonix.molt.internal.bundle.DexStringEncryptor.deriveKey(seed.get()),
+                key = io.github.amsonix.molt.internal.bundle.DexStringEncryptor.deriveKey(fogSeed),
+                seed = fogSeed,
             ),
         )
     }
@@ -291,10 +296,17 @@ abstract class MoltObfuscateGenerateFogAssetsTask : DefaultTask() {
                 .fogAssetsPackagePrefix(applicationId.get()).replace('.', '/'),
         )
         packageDir.mkdirs()
+        val fogAssetsSeed = seed.get()
         val (fogAssets, initializer) = io.github.amsonix.molt.internal.bundle.FogAssetsSource
-            .buildSource(applicationId.get(), seed.get())
-        File(packageDir, "FogAssets.java").writeText(fogAssets)
-        File(packageDir, "FogAssetsInitializer.java").writeText(initializer)
+            .buildSource(applicationId.get(), fogAssetsSeed)
+        File(
+            packageDir,
+            io.github.amsonix.molt.internal.bundle.FogAssetsSource.fogAssetsClassName(fogAssetsSeed) + ".java",
+        ).writeText(fogAssets)
+        File(
+            packageDir,
+            io.github.amsonix.molt.internal.bundle.FogAssetsSource.fogAssetsInitializerClassName(fogAssetsSeed) + ".java",
+        ).writeText(initializer)
     }
 }
 

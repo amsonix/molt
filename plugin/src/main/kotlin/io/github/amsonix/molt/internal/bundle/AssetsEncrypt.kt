@@ -37,16 +37,39 @@ internal object FogAssetsSource {
 
     fun fogAssetsPackagePrefix(applicationId: String): String = "$applicationId.shell.fogassets"
 
-    fun fogAssetsDescriptor(applicationId: String): String =
-        "L${fogAssetsPackagePrefix(applicationId).replace('.', '/')}/FogAssets;"
+    /** 解密类名由 seed 派生（每次构建不同）——防"grep 固定类名"的自动化提取。 */
+    fun fogAssetsClassName(seed: Int): String {
+        val random = SeedRandom.create(seed, "fogassets-class")
+        val letters = "abcdefghijklmnopqrstuvwxyz"
+        return buildString {
+            append('F')
+            repeat(3 + random.nextInt(3)) { append(letters[random.nextInt(letters.length)]) }
+            append(random.nextInt(10))
+        }
+    }
+
+    fun fogAssetsInitializerClassName(seed: Int): String {
+        val random = SeedRandom.create(seed, "fogassets-init")
+        val letters = "abcdefghijklmnopqrstuvwxyz"
+        return buildString {
+            append('I')
+            repeat(3 + random.nextInt(3)) { append(letters[random.nextInt(letters.length)]) }
+            append(random.nextInt(10))
+        }
+    }
+
+    fun fogAssetsDescriptor(applicationId: String, seed: Int): String =
+        "L${fogAssetsPackagePrefix(applicationId).replace('.', '/')}/${fogAssetsClassName(seed)};"
 
     /** 返回 (FogAssets.java, FogAssetsInitializer.java) 两个 public 类源码。 */
     fun buildSource(applicationId: String, seed: Int): Pair<String, String> {
         val pkg = fogAssetsPackagePrefix(applicationId)
+        val className = fogAssetsClassName(seed)
+        val initializerName = fogAssetsInitializerClassName(seed)
         val fogAssets = """
             package $pkg;
 
-            public final class FogAssets {
+            public final class $className {
                 private static final int SEED = $seed;
                 private static android.content.Context context;
 
@@ -82,10 +105,10 @@ internal object FogAssetsSource {
         val initializer = """
             package $pkg;
 
-            public final class FogAssetsInitializer extends android.content.ContentProvider {
+            public final class $initializerName extends android.content.ContentProvider {
                 @Override
                 public boolean onCreate() {
-                    FogAssets.init(getContext());
+                    $className.init(getContext());
                     return true;
                 }
 
@@ -121,9 +144,9 @@ internal object FogAssetsSource {
     }
 
     /** ContentProvider manifest 声明 snippet（authority 需全局唯一）。 */
-    fun manifestSnippet(applicationId: String): String = """
+    fun manifestSnippet(applicationId: String, seed: Int): String = """
         <provider xmlns:android="http://schemas.android.com/apk/res/android"
-            android:name="${fogAssetsPackagePrefix(applicationId)}.FogAssetsInitializer"
+            android:name="${fogAssetsPackagePrefix(applicationId)}.${fogAssetsInitializerClassName(seed)}"
             android:authorities="$applicationId.fogassets"
             android:exported="false"
             android:multiprocess="false" />

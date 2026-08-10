@@ -168,7 +168,7 @@ internal object MoltObfuscateVariantWiring {
             ) {
                 providerSnippet.set(
                     io.github.amsonix.molt.internal.bundle.FogAssetsSource
-                        .manifestSnippet(variantApplicationId),
+                        .manifestSnippet(variantApplicationId, seed),
                 )
             }
             variant.artifacts.use(mergeManifestTask)
@@ -366,7 +366,10 @@ internal object MoltObfuscateVariantWiring {
                 stringEncryptEnabled.set(variantSettings.stringEncryptEnabled)
                 stringEncryptExcludePatterns.set(extension.stringEncrypt.excludePatterns)
                 stringEncryptKeepStrings.set(extension.stringEncrypt.keepStrings)
-                fogDescriptor.set(io.github.amsonix.molt.internal.bundle.DexStringEncryptor.fogDescriptor(variant.applicationId.get()))
+                fogDescriptor.set(
+                    io.github.amsonix.molt.internal.bundle.DexStringEncryptor
+                        .fogDescriptor(variant.applicationId.get(), seedValue),
+                )
                 assetsProtectEnabled.set(variantSettings.assetsProtectEnabled)
                 assetsProtectFilePatterns.set(extension.assetsProtect.filePatterns)
                 assetsProtectJunkFileCount.set(extension.assetsProtect.junkFileCount)
@@ -377,7 +380,7 @@ internal object MoltObfuscateVariantWiring {
                 assetsEncryptFilePatterns.set(extension.assetsEncrypt.filePatterns)
                 fogAssetsDescriptor.set(
                     io.github.amsonix.molt.internal.bundle.FogAssetsSource
-                        .fogAssetsDescriptor(variant.applicationId.get()),
+                        .fogAssetsDescriptor(variant.applicationId.get(), seedValue),
                 )
                 signing.storeFile?.let(signingStoreFile::set)
                 signingStorePassword.set(signing.storePassword.orEmpty())
@@ -454,7 +457,10 @@ internal object MoltObfuscateVariantWiring {
                 stringEncryptEnabled.set(variantSettings.stringEncryptEnabled)
                 stringEncryptExcludePatterns.set(extension.stringEncrypt.excludePatterns)
                 stringEncryptKeepStrings.set(extension.stringEncrypt.keepStrings)
-                fogDescriptor.set(io.github.amsonix.molt.internal.bundle.DexStringEncryptor.fogDescriptor(variant.applicationId.get()))
+                fogDescriptor.set(
+                    io.github.amsonix.molt.internal.bundle.DexStringEncryptor
+                        .fogDescriptor(variant.applicationId.get(), seedValue),
+                )
                 assetsProtectEnabled.set(variantSettings.assetsProtectEnabled)
                 assetsProtectFilePatterns.set(extension.assetsProtect.filePatterns)
                 assetsProtectJunkFileCount.set(extension.assetsProtect.junkFileCount)
@@ -465,7 +471,7 @@ internal object MoltObfuscateVariantWiring {
                 assetsEncryptFilePatterns.set(extension.assetsEncrypt.filePatterns)
                 fogAssetsDescriptor.set(
                     io.github.amsonix.molt.internal.bundle.FogAssetsSource
-                        .fogAssetsDescriptor(variant.applicationId.get()),
+                        .fogAssetsDescriptor(variant.applicationId.get(), seedValue),
                 )
                 wireIncrementalMappingInputs(
                     project = project,

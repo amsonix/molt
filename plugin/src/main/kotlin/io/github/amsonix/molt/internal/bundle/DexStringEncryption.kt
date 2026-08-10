@@ -60,13 +60,24 @@ internal object DexStringEncryptor {
 
     fun fogPackagePrefix(applicationId: String): String = "$applicationId.shell.fog"
 
-    fun fogDescriptor(applicationId: String): String =
-        "L${fogPackagePrefix(applicationId).replace('.', '/')}/Fog;"
+    /** 解密类名由 seed 派生（每次构建不同）——防"grep 固定类名"的自动化提取。 */
+    fun fogClassName(seed: Int): String {
+        val random = SeedRandom.create(seed, "fog-class")
+        val letters = "abcdefghijklmnopqrstuvwxyz"
+        return buildString {
+            append('F')
+            repeat(3 + random.nextInt(3)) { append(letters[random.nextInt(letters.length)]) }
+            append(random.nextInt(10))
+        }
+    }
 
-    fun buildFogSource(applicationId: String, key: IntArray): String = """
+    fun fogDescriptor(applicationId: String, seed: Int): String =
+        "L${fogPackagePrefix(applicationId).replace('.', '/')}/${fogClassName(seed)};"
+
+    fun buildFogSource(applicationId: String, key: IntArray, seed: Int): String = """
         package ${fogPackagePrefix(applicationId)};
 
-        public final class Fog {
+        public final class ${fogClassName(seed)} {
             private static final int[] KEY = {${key.joinToString()}};
 
             public static String d(String s) {
