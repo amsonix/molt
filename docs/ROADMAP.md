@@ -2,12 +2,21 @@
 
 Discussed directions not yet scheduled, ordered by value.
 
+## Done (closed backlog items)
+
+| Direction | Delivery |
+|-----------|----------|
+| Assets text encryption (declared manifest + FogAssets decode + ContentProvider init) | ✅ Shipped (4 commits): call-site rewrite (`open` / `open(String,int)`), openFd const-call auto-exclusion, AAPT no-compress media-extension intent-layer exclusion, encrypted entries forced DEFLATED (openFd always throws IOException — native method check), build warnings routed through the Gradle logger |
+| DEX control-flow perturbation (junk nop injection) | ✅ Shipped (`dexPerturb`, seed-derived deterministic, works standalone without stringEncrypt) |
+
 ## Backlog (by value)
 
 | Direction | Serves | Cost | Status |
 |-----------|--------|------|--------|
-
-| Assets text encryption tier (declared manifest + Fog key + runtime decode helper) | Resource anti-extraction | 1 day | unscheduled |
+| Config inlining (build-time small-config → encrypted constant classes, replacing most assets-encryption use) | Resource anti-extraction | 2-3 days | unscheduled |
+| Fog/FogAssets class-name randomization (auto-extraction target hardening) | Self-protection | half day | unscheduled |
+| Collect remaining java.util.logging sites (AssetsProtectionEngine etc., 8 files) into Gradle logger | Warning visibility | half day | unscheduled |
+| Promote cross-agp 9.3.0 probe rows to gate | Compatibility regression | 30 min | unscheduled |
 
 
 
@@ -25,6 +34,6 @@ Discussed directions not yet scheduled, ordered by value.
 
 - Code virtualization (person-years of effort, commercial moat, out of scope)
 - .so encryption with runtime decryption loading (third-party SDK .so loading paths are not controllable; Play review risk)
-- Transparent AssetManager hook (ArtMethod replacement — no policy prohibition, but version-compatibility maintenance cost is a commercial budget item)
+- Transparent AssetManager hook (ArtMethod replacement — AOSP-verified: entry-point offsets differ across three eras (44/28/24 on 7.0 / 8.0-11 / 12+), and 12+ ART Mainline makes the on-device ART version unpredictable; policy grey zone + unrecoverable native crashes, commercial budget item)
 - 7z secondary compression (Play disallows LZMA for incremental updates; strong fingerprint signature)
 - Heavy image transforms beyond existing lossy micro-compression (WebP / resource tightening belong to build configuration)

@@ -22,13 +22,25 @@
 | 资源表混淆 | 产物打包后改写 APK/AAB 内 `resources.arsc` 与 res 路径 |
 | Component 改类名 | 将四大组件完整类名映射为随机短名（如 `SplashActivity` → `e3.gj1`），改写 DEX / Manifest |
 | View 改类名 | 替换 layout 中自定义 View 的完整类名 |
-| 字符串加密 | R8 完成后 DEX 内 `const-string` → `Fog.d(...)` 解密调用（工程包内，密钥由 seed 派生） |
+| 字符串加密 | R8 完成后 DEX 内 `const-string` → `Fog.d(...)` 解密调用（工程包内，密钥由 seed 派生，每明文独立 key） |
+| DEX 控制流扰动 | 向方法体注入确定性 nop（`dexPerturb`，light/medium/heavy），可与字符串加密独立启用 |
 | assets 扰动 | 向 `assets/` 注入假字段 / 注释 / seed 派生假文件（APK + AAB） |
+| assets 加密 | 清单命中文件加密 + `AssetManager.open()` 调用点改写为 `FogAssets.open()`（ContentProvider 自动初始化）；openFd 常量调用自动排除、AAPT no-compress 媒体扩展名（jpg/mp4/mp3/ttf 等 35 个）意图层排除、加密条目强制 DEFLATED（openFd 遇压缩必抛异常，杜绝密文 fd） |
 | Mapping 合成 | 合并 R8、资源、改类名对照表，供 Crashlytics 上传 |
 | Baseline Profile | 按合成 mapping 重编 `baseline.prof` / `baseline.profm` |
 | Keep 验包 | 可选校验 keep 资源未被误混淆 |
 
 > **执行顺序**：编译期 Junk / 资源 Overlay → R8 代码混淆 → R8 完成后改类名与资源表混淆 → 合成 mapping。
+
+## 威胁模型（安全边界）
+
+**防护目标**：防静态解包——阻止攻击者直接解包 APK/AAB 读取敏感配置、定位业务逻辑、还原资源映射。
+
+**防护边界（诚实声明）**：
+- 所有客户端加密（含商业方案）密钥均在客户端，**不防定向攻击**（有工具和耐心的逆向者可通过分析解密函数还原）
+- 字符串/资产解密函数类名固定（`Fog`/`FogAssets`），自动化提取工具可定位——属已知边界
+- 调用点改写只覆盖字节码中常量调用；动态拼接路径、反射读取的文件**不加密**（构建期告警提示）
+- openFd/WebView 直读路径不经 Java 解密层：被 openFd 消费的媒体文件不加密（意图层），WebView `file:///android_asset/` 建议迁移 `WebViewAssetLoader`（其 `open()` 调用点被自动覆盖）
 
 ## 术语说明
 

@@ -22,13 +22,25 @@ Use cases: raise the cost of reverse engineering / repackaging, protect resource
 | Resource table obfuscation | Rewrites `resources.arsc` and `res` paths inside APK/AAB after packaging |
 | Component rename | Maps four component types to random short FQCNs (e.g. `SplashActivity` → `e3.gj1`); patches DEX / Manifest |
 | View rename | Replaces custom View FQCNs in layouts |
-| String encryption | Post-R8 DEX `const-string` → `Fog.d(...)` decrypt calls (project packages, seed-derived key) |
+| String encryption | Post-R8 DEX `const-string` → `Fog.d(...)` decrypt calls (project packages, seed-derived key, per-plaintext keys) |
+| DEX control-flow perturbation | Deterministic nop injection (`dexPerturb`, light/medium/heavy); works standalone without string encryption |
 | Assets perturbation | Injects junk fields / comments / seed-derived junk files into `assets/` (APK + AAB) |
+| Assets encryption | Manifest-matched assets encrypted + `AssetManager.open()` call sites rewritten to `FogAssets.open()` (ContentProvider auto-init); openFd const calls auto-excluded, AAPT no-compress media extensions (35: jpg/mp4/mp3/ttf...) excluded at intent layer, encrypted entries forced DEFLATED (openFd always throws — no ciphertext-fd state) |
 | Mapping merge | Merges R8, resource, and rename mappings for Crashlytics upload |
 | Baseline Profile | Recompiles `baseline.prof` / `baseline.profm` using the merged mapping |
 | Keep verification | Optional check that kept resources were not obfuscated |
 
 > **Pipeline**: compile-time junk / resource overlay → R8 → post-R8 rename + resource table obfuscation → merged mapping.
+
+## Threat model (security boundary)
+
+**Goal**: static-unpack resistance — prevent reading sensitive config, locating business logic, or restoring resource mappings by unpacking the APK/AAB.
+
+**Boundaries (honest)**:
+- All client-side encryption (commercial included) keeps keys on-device: **does not resist targeted attacks** (determined reverse engineers can recover via the decrypt functions)
+- `Fog`/`FogAssets` class names are fixed — an automated-extraction target; known boundary
+- Call-site rewrite covers constant bytecode calls only; dynamic-path / reflection reads stay **unencrypted** (build-time warning)
+- openFd / WebView direct reads bypass the Java decrypt layer: openFd-consumed media files are not encrypted (intent layer); for WebView `file:///android_asset/`, migrate to `WebViewAssetLoader` (its `open()` calls are auto-rewritten)
 
 ## Glossary
 
