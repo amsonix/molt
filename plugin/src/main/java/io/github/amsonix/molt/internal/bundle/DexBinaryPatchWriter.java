@@ -81,7 +81,8 @@ final class DexBinaryPatchWriter {
         if (!anyTypeNeedsRewrite(dexFile, typeRewriter)
                 && !containsClassToPublicize(dexFile, publicClassDescriptors)
                 && !containsEncryptableClass(dexFile, stringConfig)
-                && !containsAssetsEncryptableClass(dexFile, assetsEncrypt)) {
+                && !containsAssetsEncryptableClass(dexFile, assetsEncrypt)
+                && dexPerturb == null) {
             return input;
         }
 
@@ -99,9 +100,8 @@ final class DexBinaryPatchWriter {
                     && !AccessFlags.PUBLIC.isSet(rewritten.getAccessFlags())) {
                 rewritten = publicClassDef(rewritten);
             }
-            boolean perturbClass = dexPerturb != null
-                    && DexStringEncryptor.INSTANCE.shouldEncryptClass(classDef.getType(), stringConfig);
-            if (perturbClass) {
+            // dexPerturb 对任意类安全（nop 无副作用），不依赖 stringConfig——单独开启也能生效。
+            if (dexPerturb != null) {
                 rewritten = DexPerturber.INSTANCE.rewriteClass(rewritten, dexPerturb);
             }
             if (stringConfig != null

@@ -23,14 +23,13 @@ import java.io.File
  * DEX 中 `AssetManager.open(String)` 调用点改写为 `FogAssets.open(String)`（运行时解密）。
  * WebView / SDK 自读文件、openFd 调用不适用——不要加入清单。
  *
- * [autoExcludeFdFiles]：构建期扫描 DEX 中 `openFd(String)`/`openNonAssetFd(String)`
- * 的常量文件名，命中清单的文件自动跳过加密（fd 读取路径在 Java 外，加密必失败）。
+ * STORED 条目（AAPT no-compress 媒体）天然不加密——openFd 依赖 STORED 才能返回 fd，
+ * 加密会破坏 fd 场景；DEFLATED 条目经常量 `open()` 调用点改写后解密。
  */
 internal data class AssetsEncryptConfig(
     val seed: Int,
     val filePatterns: List<String>,
     val fogAssetsDescriptor: String,
-    val autoExcludeFdFiles: Boolean = true,
 )
 
 /** FogAssets 解密 + ContentProvider 初始化源码生成（与 Fog 同密钥体系）。 */
@@ -145,14 +144,37 @@ internal object DexAssetEncryptor {
     private val FD_METHODS = setOf("openFd", "openNonAssetFd")
 
     /** 扫描 DEX 中 `openFd(String)`/`openNonAssetFd(String)` 的常量文件名参数。 */
-    fun scanFdReferencedPaths(dexFile: DexBackedDexFile): Set<String> {
+    fun scanFdReferencedPaths(dexFile: DexBackedDexFile): Set<String> =
+        scanReferencedPaths(dexFile) { reference ->
+            reference.definingClass == ASSET_MANAGER &&
+                reference.name in FD_METHODS &&
+                reference.parameterTypes == OPEN_1ARG_SIGNATURE &&
+                reference.returnType == FD_RETURN_TYPE
+        }
+
+    /**
+     * 扫描 DEX 中 `open(String)`/`open(String, int)` 或已改写的 `FogAssets.open(...)`
+     * 的常量文件名参数。扫描发生在 dex 改写之后——调用点已是 FogAssets.open。
+     */
+    fun scanOpenReferencedPaths(dexFile: DexBackedDexFile, fogAssetsDescriptor: String): Set<String> =
+        scanReferencedPaths(dexFile) { reference ->
+            val paramsMatch = reference.parameterTypes == OPEN_1ARG_SIGNATURE ||
+                reference.parameterTypes == OPEN_2ARG_SIGNATURE
+            if (reference.name != "open" || reference.returnType != RETURN_TYPE || !paramsMatch) return@scanReferencedPaths false
+            reference.definingClass == ASSET_MANAGER || reference.definingClass == fogAssetsDescriptor
+        }
+
+    private fun scanReferencedPaths(
+        dexFile: DexBackedDexFile,
+        isTarget: (MethodReference) -> Boolean,
+    ): Set<String> {
         val paths = mutableSetOf<String>()
         for (classDef in dexFile.classes) {
             for (method in classDef.directMethods + classDef.virtualMethods) {
                 val instructions = method.implementation?.instructions?.toList() ?: continue
                 for (index in instructions.indices) {
                     val instruction = instructions[index]
-                    val pathRegister = fdCallPathRegister(instruction) ?: continue
+                    val pathRegister = callPathRegister(instruction, isTarget) ?: continue
                     val previous = if (index > 0) instructions[index - 1] else null
                     if (previous !is org.jf.dexlib2.iface.instruction.OneRegisterInstruction) continue
                     if (previous !is org.jf.dexlib2.iface.instruction.ReferenceInstruction) continue
@@ -165,19 +187,21 @@ internal object DexAssetEncryptor {
         return paths
     }
 
-    private fun fdCallPathRegister(instruction: Instruction): Int? {
+    private fun callPathRegister(
+        instruction: Instruction,
+        isTarget: (MethodReference) -> Boolean,
+    ): Int? {
         if (instruction !is ReferenceInstruction) return null
         val reference = instruction.reference as? MethodReference ?: return null
-        if (reference.definingClass != ASSET_MANAGER ||
-            reference.name !in FD_METHODS ||
-            reference.parameterTypes != OPEN_1ARG_SIGNATURE ||
-            reference.returnType != FD_RETURN_TYPE
-        ) {
-            return null
-        }
+        if (!isTarget(reference)) return null
+        // invoke-static 首个参数在 registerC（无 receiver）；invoke-virtual 的 path 是第二个参数（registerD）。
+        val isStatic = instruction.opcode == Opcode.INVOKE_STATIC ||
+            instruction.opcode == Opcode.INVOKE_STATIC_RANGE
         return when (instruction) {
-            is org.jf.dexlib2.iface.instruction.FiveRegisterInstruction -> instruction.registerD
-            is org.jf.dexlib2.iface.instruction.RegisterRangeInstruction -> instruction.startRegister + 1
+            is org.jf.dexlib2.iface.instruction.FiveRegisterInstruction ->
+                if (isStatic) instruction.registerC else instruction.registerD
+            is org.jf.dexlib2.iface.instruction.RegisterRangeInstruction ->
+                if (isStatic) instruction.startRegister else instruction.startRegister + 1
             else -> null
         }
     }
@@ -313,21 +337,27 @@ internal object ZipAssetEncryptor {
 
     private val WEBVIEW_ASSET_REFERENCE = Regex("""file:///android_asset/[^"'\s)]+""")
 
-    /** patch 结果统计：加密文件数、因 openFd 引用被跳过的文件数。 */
-    data class Result(val encrypted: Int, val fdExcluded: Int)
+    /** patch 结果统计：加密数、openFd 引用排除数、清单内无常量 open 调用点跳过数。 */
+    data class Result(val encrypted: Int, val fdExcluded: Int, val noCallSite: Int)
 
     fun patchZipInPlace(zipFile: File, config: AssetsEncryptConfig, assetsPrefix: String): Result {
-        if (config.filePatterns.isEmpty()) return Result(0, 0)
+        if (config.filePatterns.isEmpty()) return Result(0, 0, 0)
         val temp = File.createTempFile("molt-assets-encrypt", ".zip", zipFile.parentFile)
         var encrypted = 0
         var fdExcluded = 0
+        var noCallSite = 0
         try {
             java.util.zip.ZipFile(zipFile).use { zipIn ->
-                val fdReferenced = if (config.autoExcludeFdFiles) {
-                    scanFdReferencedAssets(zipIn, config, assetsPrefix)
-                } else {
-                    emptySet()
+                // 加密决策由读取机制决定（不依赖 zip method——AAPT2 对极小文件也 STORED，不可靠）：
+                // 1) 常量 open() 调用点 = 流式读取、可改写 → 加密；
+                // 2) 常量 openFd() 调用点 = native 直读、无改写点 → 保持明文（功能正常优先）；
+                // 3) 无常量调用点 = 动态拼接/反射读取 → 保持明文 + 告警（避免"加密了无人能解"）。
+                // 加密条目强制 DEFLATED：native openFileDescriptor 检查 zip method 字段，
+                // DEFLATED 一律抛 IOException——加密文件绝无"密文 fd"状态（免疫兜底）。
+                val openReferenced = scanReferencedAssets(zipIn) {
+                    DexAssetEncryptor.scanOpenReferencedPaths(it, config.fogAssetsDescriptor)
                 }
+                val fdReferenced = scanReferencedAssets(zipIn) { DexAssetEncryptor.scanFdReferencedPaths(it) }
                 java.util.zip.ZipOutputStream(temp.outputStream().buffered()).use { zipOut ->
                     zipIn.entries().asSequence().forEach { entry ->
                         if (entry.isDirectory) {
@@ -338,30 +368,39 @@ internal object ZipAssetEncryptor {
                         }
                         val inAssets = entry.name.startsWith(assetsPrefix)
                         val relativePath = if (inAssets) entry.name.removePrefix(assetsPrefix) else entry.name
-                        if (inAssets && relativePath in fdReferenced) {
-                            fdExcluded++
-                            io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
-                                zipOut, zipIn, entry, entry.name,
-                            )
-                            return@forEach
-                        }
-                        if (inAssets && matches(entry.name, config.filePatterns)) {
-                            val bytes = zipIn.getInputStream(entry).use { it.readBytes() }
-                            warnOnWebViewReferences(zipFile, entry.name, bytes)
-                            // 密钥按相对 assets 的路径派生（与运行时 FogAssets.open(path) 一致）。
-                            val encryptedBytes = encryptBytes(relativePath, bytes, config.seed)
-                            io.github.amsonix.molt.internal.bundle.ZipEntryWriter.writeBytes(
-                                zipOut = zipOut,
-                                source = entry,
-                                outputName = entry.name,
-                                bytes = encryptedBytes,
-                                contentsChanged = true,
-                            )
-                            encrypted++
-                        } else {
-                            io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
-                                zipOut, zipIn, entry, entry.name,
-                            )
+                        when {
+                            inAssets && relativePath in fdReferenced && matches(entry.name, config.filePatterns) -> {
+                                fdExcluded++
+                                io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
+                                    zipOut, zipIn, entry, entry.name,
+                                )
+                            }
+                            inAssets && relativePath in openReferenced && matches(entry.name, config.filePatterns) -> {
+                                val bytes = zipIn.getInputStream(entry).use { it.readBytes() }
+                                warnOnWebViewReferences(zipFile, entry.name, bytes)
+                                // 密钥按相对 assets 的路径派生（与运行时 FogAssets.open(path) 一致）。
+                                val encryptedBytes = encryptBytes(relativePath, bytes, config.seed)
+                                io.github.amsonix.molt.internal.bundle.ZipEntryWriter.writeBytes(
+                                    zipOut = zipOut,
+                                    source = entry,
+                                    outputName = entry.name,
+                                    bytes = encryptedBytes,
+                                    contentsChanged = true,
+                                    forceDeflate = true,
+                                )
+                                encrypted++
+                            }
+                            inAssets && matches(entry.name, config.filePatterns) -> {
+                                noCallSite++
+                                io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
+                                    zipOut, zipIn, entry, entry.name,
+                                )
+                            }
+                            else -> {
+                                io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
+                                    zipOut, zipIn, entry, entry.name,
+                                )
+                            }
                         }
                     }
                 }
@@ -373,22 +412,26 @@ internal object ZipAssetEncryptor {
             temp.delete()
         }
         val logger = java.util.logging.Logger.getLogger(ZipAssetEncryptor::class.java.name)
-        logger.info("molt: assets encrypted=$encrypted fdExcluded=$fdExcluded")
+        logger.info("molt: assets encrypted=$encrypted fdExcluded=$fdExcluded noCallSite=$noCallSite")
         if (fdExcluded > 0) {
             logger.warning(
                 "molt: ${fdExcluded} asset(s) referenced by AssetManager.openFd/openNonAssetFd " +
                     "were kept plaintext (fd reads bypass the FogAssets rewrite)",
             )
         }
-        return Result(encrypted, fdExcluded)
+        if (noCallSite > 0) {
+            logger.warning(
+                "molt: ${noCallSite} manifest asset(s) have no constant AssetManager.open() call site; " +
+                    "kept plaintext (dynamic-path / reflection reads cannot be decrypted)",
+            )
+        }
+        return Result(encrypted, fdExcluded, noCallSite)
     }
 
-    private fun scanFdReferencedAssets(
+    private fun scanReferencedAssets(
         zipIn: java.util.zip.ZipFile,
-        config: AssetsEncryptConfig,
-        assetsPrefix: String,
+        scanner: (org.jf.dexlib2.dexbacked.DexBackedDexFile) -> Set<String>,
     ): Set<String> {
-        val patterns = config.filePatterns
         val referenced = mutableSetOf<String>()
         zipIn.entries().asSequence()
             .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
@@ -397,9 +440,7 @@ internal object ZipAssetEncryptor {
                     null,
                     java.io.BufferedInputStream(zipIn.getInputStream(entry)),
                 )
-                for (path in DexAssetEncryptor.scanFdReferencedPaths(dexFile)) {
-                    if (matches(assetsPrefix + path, patterns)) referenced.add(path)
-                }
+                referenced.addAll(scanner(dexFile))
             }
         return referenced
     }

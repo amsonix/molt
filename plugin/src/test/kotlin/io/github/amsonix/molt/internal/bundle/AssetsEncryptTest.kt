@@ -394,7 +394,62 @@ class AssetsEncryptTest {
     }
 
     @Test
-    fun scanFdReferencedPaths_ignoresOpenAndDynamicCallers() {
+    fun scanOpenReferencedPaths_extractsConstStringFileNames() {
+        val owner = "Lcom/example/app/Main;"
+        val call = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "open",
+                listOf("Ljava/lang/String;"),
+                "Ljava/io/InputStream;",
+            ),
+        )
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("video/intro.mp4"),
+        )
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "read",
+                    emptyList(),
+                    "Ljava/io/InputStream;",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        2,
+                        listOf(constString, call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        val paths = DexAssetEncryptor.scanOpenReferencedPaths(openDex(buildDex(clazz)), "Lcom/example/app/shell/fogassets/FogAssets;")
+        assertEquals(setOf("video/intro.mp4"), paths)
+    }
+
+    @Test
+    fun scanOpenReferencedPaths_ignoresFdAndDynamicCallers() {
         val owner = "Lcom/example/app/Main;"
         val openCall = ImmutableInstruction35c(
             Opcode.INVOKE_VIRTUAL,
@@ -411,11 +466,11 @@ class AssetsEncryptTest {
                 "Ljava/io/InputStream;",
             ),
         )
-        val moveBasedCall = ImmutableInstruction35c(
+        val fdCall = ImmutableInstruction35c(
             Opcode.INVOKE_VIRTUAL,
             2,
             0,
-            2,
+            1,
             0,
             0,
             0,
@@ -453,8 +508,7 @@ class AssetsEncryptTest {
                         3,
                         listOf(
                             constString,
-                            openCall,
-                            moveBasedCall,
+                            fdCall,
                             ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0),
                         ),
                         emptyList(),
@@ -464,8 +518,8 @@ class AssetsEncryptTest {
             ),
             emptyList(),
         )
-        val paths = DexAssetEncryptor.scanFdReferencedPaths(openDex(buildDex(clazz)))
-        assertTrue("open() 调用不得计入，动态寄存器调用不得计入", paths.isEmpty())
+        val paths = DexAssetEncryptor.scanOpenReferencedPaths(openDex(buildDex(clazz)), "Lcom/example/app/shell/fogassets/FogAssets;")
+        assertTrue("fd 调用不得计入（open 扫描不匹配 openFd）", paths.isEmpty())
     }
 
     @Test
@@ -490,6 +544,26 @@ class AssetsEncryptTest {
             Opcode.CONST_STRING,
             1,
             ImmutableStringReference("video.mp4"),
+        )
+        val openCall = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "open",
+                listOf("Ljava/lang/String;"),
+                "Ljava/io/InputStream;",
+            ),
+        )
+        val cfgConstString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("config.json"),
         )
         val clazz = ImmutableClassDef(
             owner,
@@ -516,6 +590,21 @@ class AssetsEncryptTest {
                         emptyList(),
                     ),
                 ),
+                ImmutableMethod(
+                    owner,
+                    "read",
+                    emptyList(),
+                    "Ljava/io/InputStream;",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        2,
+                        listOf(cfgConstString, openCall, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
             ),
             emptyList(),
         )
@@ -526,17 +615,27 @@ class AssetsEncryptTest {
                 zout.putNextEntry(java.util.zip.ZipEntry("classes.dex"))
                 zout.write(dexBytes)
                 zout.closeEntry()
-                zout.putNextEntry(java.util.zip.ZipEntry("assets/video.mp4"))
+                zout.putNextEntry(java.util.zip.ZipEntry("assets/video.mp4").also {
+                    it.method = java.util.zip.ZipEntry.STORED
+                    val bytes = "MP4PLAINTEXT".encodeToByteArray()
+                    it.size = bytes.size.toLong()
+                    it.compressedSize = bytes.size.toLong()
+                    it.crc = java.util.zip.CRC32().apply { update(bytes) }.value
+                })
                 zout.write("MP4PLAINTEXT".encodeToByteArray())
                 zout.closeEntry()
                 zout.putNextEntry(java.util.zip.ZipEntry("assets/config.json"))
                 zout.write("""{"api": "https://example.com"}""".encodeToByteArray())
                 zout.closeEntry()
+                zout.putNextEntry(java.util.zip.ZipEntry("assets/raw.bin"))
+                zout.write("RAWPLAINTEXT".encodeToByteArray())
+                zout.closeEntry()
             }
-            val configWithVideo = config.copy(filePatterns = listOf("*.json", "*.mp4"))
+            val configWithVideo = config.copy(filePatterns = listOf("*.json", "*.mp4", "*.bin"))
             val result = ZipAssetEncryptor.patchZipInPlace(zip, configWithVideo, "assets/")
             assertEquals(1, result.encrypted)
             assertEquals(1, result.fdExcluded)
+            assertEquals(1, result.noCallSite)
 
             java.util.zip.ZipFile(zip).use { zf ->
                 val video = zf.getInputStream(zf.getEntry("assets/video.mp4")).use { it.readBytes() }
@@ -546,13 +645,83 @@ class AssetsEncryptTest {
                 )
                 val cfg = zf.getInputStream(zf.getEntry("assets/config.json")).use { it.readBytes() }
                 assertFalse(
-                    "清单内普通文件必须加密",
+                    "常量 open() 调用点的文件必须加密",
                     String(cfg, Charsets.UTF_8).contains("https://example.com"),
+                )
+                assertEquals(
+                    "加密条目必须强制 DEFLATED（openFd 遇压缩必抛 IOException，杜绝密文 fd）",
+                    java.util.zip.ZipEntry.DEFLATED,
+                    zf.getEntry("assets/config.json").method,
+                )
+                val raw = zf.getInputStream(zf.getEntry("assets/raw.bin")).use { it.readBytes() }
+                assertTrue(
+                    "无常量调用点的文件必须保持明文（动态拼接/反射读取）",
+                    String(raw, Charsets.UTF_8).contains("RAWPLAINTEXT"),
                 )
             }
         } finally {
             zip.delete()
         }
+    }
+
+    @Test
+    fun scanOpenReferencedPaths_matchesRewrittenFogAssetsCalls() {
+        val fogDescriptor = "Lcom/example/app/shell/fogassets/FogAssets;"
+        val owner = "Lcom/example/app/Main;"
+        val rewrittenCall = ImmutableInstruction35c(
+            Opcode.INVOKE_STATIC,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                fogDescriptor,
+                "open",
+                listOf("Ljava/lang/String;"),
+                "Ljava/io/InputStream;",
+            ),
+        )
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("secret.cfg"),
+        )
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "read",
+                    emptyList(),
+                    "Ljava/io/InputStream;",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        2,
+                        listOf(constString, rewrittenCall, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        val paths = DexAssetEncryptor.scanOpenReferencedPaths(openDex(buildDex(clazz)), fogDescriptor)
+        assertEquals(
+            "扫描在 dex 改写之后执行，已改写为 FogAssets.open 的调用点也必须计入",
+            setOf("secret.cfg"),
+            paths,
+        )
     }
 
     private fun buildDex(vararg classes: org.jf.dexlib2.iface.ClassDef): ByteArray {

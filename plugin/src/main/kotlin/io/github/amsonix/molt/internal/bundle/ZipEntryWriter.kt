@@ -45,8 +45,9 @@ internal object ZipEntryWriter {
         outputName: String,
         bytes: ByteArray,
         contentsChanged: Boolean,
+        forceDeflate: Boolean = false,
     ) {
-        val isStored = shouldStore(source, outputName)
+        val isStored = !forceDeflate && shouldStore(source, outputName)
         val canReuseStoredMetadata =
             isStored &&
                 !contentsChanged &&
