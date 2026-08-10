@@ -252,12 +252,12 @@ internal object ResDirFingerprint {
         val digest = MessageDigest.getInstance("SHA-256")
         val size = file.length()
         digest.update(longToBytes(size))
-        digestSampleAt(file, digest, offset = 0L)
-        if (size > SAMPLE_BYTES * 3L) {
-            digestSampleAt(file, digest, offset = size / 2 - SAMPLE_BYTES / 2)
-        }
-        if (size > SAMPLE_BYTES) {
-            digestSampleAt(file, digest, offset = size - SAMPLE_BYTES)
+        // 均匀 8 段采样覆盖更多区域（3 段对中部内容变更不敏感，增量构建会输出陈旧图）。
+        val segments = 8
+        for (index in 0 until segments) {
+            val start = (size * index) / segments
+            val offset = if (index == segments - 1) size - SAMPLE_BYTES else start
+            digestSampleAt(file, digest, offset = offset.coerceAtLeast(0L))
         }
         return digest.digest()
     }

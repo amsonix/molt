@@ -326,7 +326,10 @@ internal object MoltObfuscateVariantWiring {
                     extension = extension,
                     defaultMappingFile = mappingDir.map { dir -> dir.file("resources-mapping.txt") },
                 )
-                imageAntiDetectBundleFallback.set(extension.resourceObfuscate.imageAntiDetectBundleFallback)
+                imageAntiDetectBundleFallback.set(
+                    extension.resourceObfuscate.imageAntiDetect.get()
+                        && extension.resourceObfuscate.imageAntiDetectBundleFallback.get(),
+                )
                 imagePerceptualNoise.set(extension.resourceObfuscate.imagePerceptualNoise)
                 metadataScope.set("${variant.applicationId.get()}/${variant.name}")
                 bundleImageSeed.set(seedValue)
@@ -412,7 +415,10 @@ internal object MoltObfuscateVariantWiring {
                 failOnMissingApkKeep.set(extension.failOnMissingApkKeep)
                 useFirebaseArtifactVerifyBaseline.set(extension.useFirebaseArtifactVerifyBaseline)
                 failOnEmptyArtifactVerifyBaseline.set(extension.failOnEmptyArtifactVerifyBaseline)
-                imageAntiDetectApkFallback.set(extension.resourceObfuscate.imageAntiDetectApkFallback)
+                imageAntiDetectApkFallback.set(
+                    extension.resourceObfuscate.imageAntiDetect.get()
+                        && extension.resourceObfuscate.imageAntiDetectApkFallback.get(),
+                )
                 imagePerceptualNoise.set(extension.resourceObfuscate.imagePerceptualNoise)
                 metadataScope.set("${variant.applicationId.get()}/${variant.name}")
                 verifyApkImageAntiDetect.set(extension.resourceObfuscate.verifyApkImageAntiDetect)
