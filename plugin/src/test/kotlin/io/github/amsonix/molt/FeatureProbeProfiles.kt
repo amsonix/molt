@@ -26,6 +26,7 @@ object FeatureProbeProfiles {
             "shrink-keep" -> applyShrinkKeep(root)
             "rename-full" -> applyRenameFull(root)
             "string-fog-assets" -> applyStringFogAssets(root)
+            "assets-encrypt" -> applyAssetsEncrypt(root)
             else -> error("Unknown feature probe preset: $preset")
         }
     }
@@ -203,6 +204,40 @@ object FeatureProbeProfiles {
         File(root, "app/proguard-rules.pro").appendText(
             "\n-keep class fixture.app.MainActivity { *; }\n",
         )
+    }
+
+    private fun applyAssetsEncrypt(root: File) {
+        // 加密清单文件 + 读取它的 Activity（调用点改写目标）。
+        AgpTestFixture.write(
+            root,
+            "app/src/main/assets/secret.cfg",
+            "token=abc123\nurl=https://example.com/{id}\n",
+        )
+        AgpTestFixture.write(
+            root,
+            "app/src/main/java/fixture/app/MainActivity.java",
+            """
+            package fixture.app;
+            public class MainActivity extends android.app.Activity {
+                public java.io.InputStream read() throws java.io.IOException {
+                    return getAssets().open("secret.cfg");
+                }
+            }
+            """.trimIndent(),
+        )
+        appendMoltBlock(
+            root,
+            """
+            stringEncrypt.enabled.set(false)
+            assetsEncrypt.enabled.set(true)
+            assetsEncrypt.filePatterns.set(['*.cfg'])
+            bundleResourceObfuscate.enabled.set(true)
+            bundleResourceObfuscate.obfuscateApk.set(true)
+            allowUnsignedOutput.set(true)
+            """.trimIndent(),
+        )
+        // read() 必须存活：调用点改写才有目标。
+        File(root, "app/proguard-rules.pro").appendText("\n-keep class fixture.app.MainActivity { *; }\n")
     }
 
     private fun writeMinimalPng(root: File, relativePath: String) {

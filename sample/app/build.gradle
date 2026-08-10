@@ -52,6 +52,8 @@ molt {
     stringEncrypt.enabled.set(true)
     dexPerturb.enabled.set(true)
     dexPerturb.intensity.set("medium")
+    assetsEncrypt.enabled.set(true)
+    assetsEncrypt.filePatterns.set(["config.json"])
     assetsProtect.enabled.set(true)
     assetsProtect.filePatterns.set(['*.json'])
     assetsProtect.junkFileCount.set(2)

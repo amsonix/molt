@@ -21,6 +21,8 @@ import org.gradle.work.DisableCachingByDefault
 import com.android.build.api.artifact.ArtifactTransformationRequest
 import com.android.build.api.variant.BuiltArtifact
 import io.github.amsonix.molt.internal.bundle.ApkResourceObfuscateEngine
+import io.github.amsonix.molt.internal.bundle.AssetsEncryptConfig
+import io.github.amsonix.molt.internal.bundle.ZipAssetEncryptor
 import io.github.amsonix.molt.internal.bundle.AssetsProtectionConfig
 import io.github.amsonix.molt.internal.bundle.AssetsProtectionEngine
 import io.github.amsonix.molt.internal.bundle.ApkSignerHelper
@@ -190,6 +192,15 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
     abstract val dexPerturbIntensity: Property<String>
 
     @get:Input
+    abstract val assetsEncryptEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val assetsEncryptFilePatterns: org.gradle.api.provider.ListProperty<String>
+
+    @get:Input
+    abstract val fogAssetsDescriptor: Property<String>
+
+    @get:Input
     abstract val assetsProtectEnabled: Property<Boolean>
 
     @get:Input
@@ -248,6 +259,7 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
                 } else {
                     null
                 },
+                assetsEncrypt = buildAssetsEncryptConfig(bundleImageSeed.get()),
             ),
         )
         MoltObfuscateTransformVerify.appendImagePatchRecords(
@@ -327,12 +339,22 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
             excludeResXmlEntryPatterns = excludeResXmlEntryPatterns.get(),
             stringEncrypt = buildStringEncryptConfig(bundleImageSeed.get()),
             dexPerturb = buildDexPerturbConfig(bundleImageSeed.get()),
+            assetsEncrypt = buildAssetsEncryptConfig(bundleImageSeed.get()),
         )
     }
 
     private fun buildDexPerturbConfig(seedValue: Int): DexPerturbationConfig? {
         if (!dexPerturbEnabled.get()) return null
         return DexPerturbationConfig(seed = seedValue, intensity = dexPerturbIntensity.get())
+    }
+
+    private fun buildAssetsEncryptConfig(seedValue: Int): AssetsEncryptConfig? {
+        if (!assetsEncryptEnabled.get() || assetsEncryptFilePatterns.get().isEmpty()) return null
+        return AssetsEncryptConfig(
+            seed = seedValue,
+            filePatterns = assetsEncryptFilePatterns.get(),
+            fogAssetsDescriptor = fogAssetsDescriptor.get(),
+        )
     }
 
     private fun buildStringEncryptConfig(seedValue: Int): DexStringEncryptionConfig? {
@@ -528,6 +550,15 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
     abstract val dexPerturbIntensity: Property<String>
 
     @get:Input
+    abstract val assetsEncryptEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val assetsEncryptFilePatterns: org.gradle.api.provider.ListProperty<String>
+
+    @get:Input
+    abstract val fogAssetsDescriptor: Property<String>
+
+    @get:Input
     abstract val assetsProtectEnabled: Property<Boolean>
 
     @get:Input
@@ -550,6 +581,9 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
         val signing = resolveSigning()
         val postR8Config = loadPostR8Config()
         val postR8Ran = postR8Config.componentMapping != null || postR8Config.viewMapping != null
+        val dexWorkNeeded = postR8Config.stringEncrypt != null ||
+            postR8Config.dexPerturb != null ||
+            postR8Config.assetsEncrypt != null
         val mappingInput = incrementalMappingFiles.singleFileOrNull()
         val outputDir = outputApkDirectory.get().asFile
         val inputDir = inputApkDirectory.get().asFile
@@ -568,6 +602,7 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
                 signing = signing,
                 postR8Config = postR8Config,
                 postR8Ran = postR8Ran,
+                dexWorkNeeded = dexWorkNeeded,
                 mappingInput = mappingInput,
             )
             outputApk
@@ -582,6 +617,7 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
         signing: SigningConfigSnapshot,
         postR8Config: ZipPostR8RenameProcessor.Config,
         postR8Ran: Boolean,
+        dexWorkNeeded: Boolean,
         mappingInput: File?,
     ) {
         outputApk.parentFile.mkdirs()
@@ -607,7 +643,7 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
             outputReport = imageAntiDetectReportOutput.orNull?.asFile,
             records = apkObfuscateResult.imagePatchRecords,
         )
-        if (postR8Ran) {
+        if (postR8Ran || dexWorkNeeded) {
             ZipPostR8RenameProcessor.processZipInPlace(unsignedOut, postR8Config)
         }
         MoltObfuscateBaselineProfileSync.maybeSync(
@@ -630,6 +666,9 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
                     assetsPrefix = "assets/",
                 ),
             )
+        }
+        buildAssetsEncryptConfig(seed.get())?.let { assetsEncryptConfig ->
+            ZipAssetEncryptor.patchZipInPlace(unsignedOut, assetsEncryptConfig, "assets/")
         }
         val alignedOut = File(workDir, "aligned.apk")
         ApkZipAligner.align(unsignedOut, alignedOut)
@@ -700,12 +739,22 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
             excludeResXmlEntryPatterns = excludeResXmlEntryPatterns.get(),
             stringEncrypt = buildStringEncryptConfig(seed.get()),
             dexPerturb = buildDexPerturbConfig(seed.get()),
+            assetsEncrypt = buildAssetsEncryptConfig(seed.get()),
         )
     }
 
     private fun buildDexPerturbConfig(seedValue: Int): DexPerturbationConfig? {
         if (!dexPerturbEnabled.get()) return null
         return DexPerturbationConfig(seed = seedValue, intensity = dexPerturbIntensity.get())
+    }
+
+    private fun buildAssetsEncryptConfig(seedValue: Int): AssetsEncryptConfig? {
+        if (!assetsEncryptEnabled.get() || assetsEncryptFilePatterns.get().isEmpty()) return null
+        return AssetsEncryptConfig(
+            seed = seedValue,
+            filePatterns = assetsEncryptFilePatterns.get(),
+            fogAssetsDescriptor = fogAssetsDescriptor.get(),
+        )
     }
 
     private fun buildStringEncryptConfig(seedValue: Int): DexStringEncryptionConfig? {

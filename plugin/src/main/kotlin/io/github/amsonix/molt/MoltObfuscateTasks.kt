@@ -265,6 +265,39 @@ abstract class MoltObfuscateGenerateFogTask : DefaultTask() {
     }
 }
 
+@CacheableTask
+abstract class MoltObfuscateGenerateFogAssetsTask : DefaultTask() {
+
+    @get:Input
+    abstract val seed: Property<Int>
+
+    @get:Input
+    abstract val applicationId: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    init {
+        group = "molt"
+        description = "Generate assets decryption helper (FogAssets + ContentProvider initializer)"
+    }
+
+    @TaskAction
+    fun generate() {
+        val javaDir = File(outputDirectory.get().asFile, "java")
+        val packageDir = File(
+            javaDir,
+            io.github.amsonix.molt.internal.bundle.FogAssetsSource
+                .fogAssetsPackagePrefix(applicationId.get()).replace('.', '/'),
+        )
+        packageDir.mkdirs()
+        val (fogAssets, initializer) = io.github.amsonix.molt.internal.bundle.FogAssetsSource
+            .buildSource(applicationId.get(), seed.get())
+        File(packageDir, "FogAssets.java").writeText(fogAssets)
+        File(packageDir, "FogAssetsInitializer.java").writeText(initializer)
+    }
+}
+
 internal data class ModuleScanDescriptor(
     val moduleDir: File,
     val namespace: String?,

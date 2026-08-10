@@ -155,6 +155,10 @@ abstract class MoltObfuscateExtension @Inject constructor(
     val dexPerturb: DexPerturbExtension =
         project.objects.newInstance(DexPerturbExtension::class.java)
 
+    /** assets 文本加密（声明清单 + FogAssets 运行时解密，调用点改写）。 */
+    val assetsEncrypt: AssetsEncryptExtension =
+        project.objects.newInstance(AssetsEncryptExtension::class.java)
+
     /** post-R8 DEX 改写后按 HRF + 合成 mapping 重编 baseline.prof / baseline.profm。 */
     val syncBaselineProfile: Property<Boolean> =
         project.objects.property(Boolean::class.java).convention(true)
@@ -244,6 +248,9 @@ abstract class MoltObfuscateVariantConfig @Inject constructor(
 
     val dexPerturb: DexPerturbVariantOverrideExtension =
         objects.newInstance(DexPerturbVariantOverrideExtension::class.java)
+
+    val assetsEncrypt: AssetsEncryptVariantOverrideExtension =
+        objects.newInstance(AssetsEncryptVariantOverrideExtension::class.java)
 }
 
 /** variantConfig { create("googleRelease") { junkCode { profile.set("heavy") } } } */
@@ -362,6 +369,23 @@ abstract class DexPerturbExtension @Inject constructor(
 }
 
 abstract class DexPerturbVariantOverrideExtension @Inject constructor(
+    private val project: org.gradle.api.Project,
+) {
+    val enabled: Property<Boolean> = project.objects.property(Boolean::class.java)
+}
+
+/** assets 文本加密 DSL。 */
+abstract class AssetsEncryptExtension @Inject constructor(
+    private val project: org.gradle.api.Project,
+) {
+    /** 总开关；默认 false。 */
+    val enabled: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
+    /** 声明清单（文件名 glob，如 `*.json`）；命中的 assets 文件加密并走 FogAssets 解密。 */
+    val filePatterns: ListProperty<String> = project.objects.listProperty(String::class.java)
+}
+
+abstract class AssetsEncryptVariantOverrideExtension @Inject constructor(
     private val project: org.gradle.api.Project,
 ) {
     val enabled: Property<Boolean> = project.objects.property(Boolean::class.java)
@@ -552,6 +576,7 @@ internal fun MoltObfuscateExtension.resolveVariantSettings(
         globalStringEncryptEnabled = stringEncrypt.enabled.get(),
         globalAssetsProtectEnabled = assetsProtect.enabled.get(),
         globalDexPerturbEnabled = dexPerturb.enabled.get(),
+        globalAssetsEncryptEnabled = assetsEncrypt.enabled.get(),
         variantResourceObfuscateEnabled = override?.resourceObfuscate?.enabled?.optional(),
         variantVerifyApkKeep = override?.verify?.verifyApkKeep?.optional(),
         variantVerifyBundleKeep = override?.verify?.verifyBundleKeep?.optional(),
@@ -562,5 +587,6 @@ internal fun MoltObfuscateExtension.resolveVariantSettings(
         variantStringEncryptEnabled = override?.stringEncrypt?.enabled?.optional(),
         variantAssetsProtectEnabled = override?.assetsProtect?.enabled?.optional(),
         variantDexPerturbEnabled = override?.dexPerturb?.enabled?.optional(),
+        variantAssetsEncryptEnabled = override?.assetsEncrypt?.enabled?.optional(),
     )
 }
