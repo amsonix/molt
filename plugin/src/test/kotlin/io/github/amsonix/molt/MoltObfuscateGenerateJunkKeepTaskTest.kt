@@ -44,13 +44,15 @@ class MoltObfuscateGenerateJunkKeepTaskTest {
             task.packagePrefix.set("sample.custom.junk")
             task.fogEnabled.set(true)
             task.fogAssetsEnabled.set(true)
+            task.applicationIds.add("com.example.app")
             task.outputFile.set(project.layout.buildDirectory.file("junk-keep.pro"))
 
             task.generate()
 
             val keep = task.outputFile.get().asFile.readText()
-            assertTrue(keep.contains("**.shell.fog.*"))
-            assertTrue(keep.contains("**.shell.fogassets.*"))
+            assertTrue(keep.contains("-keep class com.example.app.shell.fog.* { *; }"))
+            assertTrue(keep.contains("-keep class com.example.app.shell.fogassets.* { *; }"))
+            assertFalse("通配 ** 前缀不得出现（防误伤用户 shell.fog 段类）", keep.contains("**.shell.fog"))
             assertFalse(task.outputFile.get().asFile.readText().contains("-keep class sample.custom.junk"))
         } finally {
             root.deleteRecursively()
