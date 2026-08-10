@@ -138,8 +138,9 @@ internal object DexAssetEncryptor {
     private val OPEN_2ARG_SIGNATURE = listOf("Ljava/lang/String;", "I")
     private val RETURN_TYPE = "Ljava/io/InputStream;"
 
-    fun containsAssetsEncryptableClass(dexFile: DexBackedDexFile): Boolean {
+    fun containsAssetsEncryptableClass(dexFile: DexBackedDexFile, config: AssetsEncryptConfig): Boolean {
         for (classDef in dexFile.classes) {
+            if (classDef.type == config.fogAssetsDescriptor) continue
             for (method in classDef.directMethods + classDef.virtualMethods) {
                 val implementation = method.implementation ?: continue
                 for (instruction in implementation.instructions) {
@@ -151,6 +152,8 @@ internal object DexAssetEncryptor {
     }
 
     fun rewriteClass(classDef: ClassDef, config: AssetsEncryptConfig): ClassDef {
+        // FogAssets 内部的 getAssets().open() 是解密实现，不得改写（否则自递归）。
+        if (classDef.type == config.fogAssetsDescriptor) return classDef
         val direct = classDef.directMethods.map { rewriteMethod(it, config) }
         val virtual = classDef.virtualMethods.map { rewriteMethod(it, config) }
         return ImmutableClassDef(
@@ -283,7 +286,9 @@ internal object ZipAssetEncryptor {
                         if (entry.name.startsWith(assetsPrefix) && matches(entry.name, config.filePatterns)) {
                             val bytes = zipIn.getInputStream(entry).use { it.readBytes() }
                             warnOnWebViewReferences(zipFile, entry.name, bytes)
-                            val encryptedBytes = encryptBytes(entry.name, bytes, config.seed)
+                            // 密钥按相对 assets 的路径派生（与运行时 FogAssets.open(path) 一致）。
+                            val relativePath = entry.name.removePrefix(assetsPrefix)
+                            val encryptedBytes = encryptBytes(relativePath, bytes, config.seed)
                             io.github.amsonix.molt.internal.bundle.ZipEntryWriter.writeBytes(
                                 zipOut = zipOut,
                                 source = entry,
