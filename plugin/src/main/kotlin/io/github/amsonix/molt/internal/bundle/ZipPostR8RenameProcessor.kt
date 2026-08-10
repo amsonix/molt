@@ -5,7 +5,6 @@ import io.github.amsonix.molt.internal.util.GlobMatcher
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.util.logging.Logger
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 

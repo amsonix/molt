@@ -2,7 +2,6 @@ package io.github.amsonix.molt.internal.bundle
 
 import org.gradle.api.logging.Logger
 import java.io.File
-import java.util.logging.Logger as JdkLogger
 
 internal object MoltObfuscateBaselineProfileSync {
 
