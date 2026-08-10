@@ -150,6 +150,35 @@ internal object MoltObfuscateVariantWiring {
             }
         }
 
+        if (variantSettings.assetsEncryptEnabled) {
+            val fogAssetsTask = project.tasks.register<MoltObfuscateGenerateFogAssetsTask>(
+                "moltObfuscateGenerateFogAssets$capitalized",
+            ) {
+                this.seed.set(seed)
+                applicationId.set(variantApplicationId)
+                outputDirectory.set(
+                    project.layout.buildDirectory.dir("generated/shell-obfuscate/$variantName/fogassets"),
+                )
+            }
+            variant.sources.java?.addGeneratedSourceDirectory(fogAssetsTask) { task ->
+                project.objects.directoryProperty().value(task.outputDirectory.dir("java"))
+            }
+            val mergeManifestTask = project.tasks.register<MoltObfuscateMergeFogAssetsManifestTask>(
+                "moltObfuscateMergeFogAssetsManifest$capitalized",
+            ) {
+                providerSnippet.set(
+                    io.github.amsonix.molt.internal.bundle.FogAssetsSource
+                        .manifestSnippet(variantApplicationId),
+                )
+            }
+            variant.artifacts.use(mergeManifestTask)
+                .wiredWithFiles(
+                    { task -> task.mergedManifest },
+                    { task -> task.updatedManifest },
+                )
+                .toTransform(SingleArtifact.MERGED_MANIFEST)
+        }
+
         if (junkConfig.mergeJunkManifest && junkConfig.activityCountPerPackage > 0) {
             val mergeManifestTask =
                 project.tasks.register<MoltObfuscateMergeJunkManifestTask>(
@@ -341,6 +370,12 @@ internal object MoltObfuscateVariantWiring {
                 assetsProtectExcludePatterns.set(extension.assetsProtect.excludePatterns)
                 dexPerturbEnabled.set(variantSettings.dexPerturbEnabled)
                 dexPerturbIntensity.set(extension.dexPerturb.intensity)
+                assetsEncryptEnabled.set(variantSettings.assetsEncryptEnabled)
+                assetsEncryptFilePatterns.set(extension.assetsEncrypt.filePatterns)
+                fogAssetsDescriptor.set(
+                    io.github.amsonix.molt.internal.bundle.FogAssetsSource
+                        .fogAssetsDescriptor(variant.applicationId.get()),
+                )
                 signing.storeFile?.let(signingStoreFile::set)
                 signingStorePassword.set(signing.storePassword.orEmpty())
                 signingKeyAlias.set(signing.keyAlias.orEmpty())
@@ -420,6 +455,12 @@ internal object MoltObfuscateVariantWiring {
                 assetsProtectExcludePatterns.set(extension.assetsProtect.excludePatterns)
                 dexPerturbEnabled.set(variantSettings.dexPerturbEnabled)
                 dexPerturbIntensity.set(extension.dexPerturb.intensity)
+                assetsEncryptEnabled.set(variantSettings.assetsEncryptEnabled)
+                assetsEncryptFilePatterns.set(extension.assetsEncrypt.filePatterns)
+                fogAssetsDescriptor.set(
+                    io.github.amsonix.molt.internal.bundle.FogAssetsSource
+                        .fogAssetsDescriptor(variant.applicationId.get()),
+                )
                 wireIncrementalMappingInputs(
                     project = project,
                     collection = incrementalMappingFiles,

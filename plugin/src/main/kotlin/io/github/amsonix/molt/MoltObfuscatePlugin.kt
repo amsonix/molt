@@ -243,6 +243,12 @@ class MoltObfuscatePlugin : Plugin<Project> {
                     io.github.amsonix.molt.internal.bundle.DexStringEncryptor::fogPackagePrefix,
                 ),
             )
+            fogAssetsEnabled.set(extension.assetsEncrypt.enabled)
+            fogAssetsPackagePrefix.convention(
+                applicationIdProvider(project, android).map(
+                    io.github.amsonix.molt.internal.bundle.FogAssetsSource::fogAssetsPackagePrefix,
+                ),
+            )
             outputFile.set(project.layout.buildDirectory.file("shell-obfuscate/molt-junk-keep.pro"))
         }
         android.buildTypes.configureEach {

@@ -40,6 +40,7 @@ internal object BundleResourceObfuscateEngine {
         val baselineProfileHumanReadable: File? = null,
         val obfuscationMapping: File? = null,
         val assetsProtect: AssetsProtectionConfig? = null,
+        val assetsEncrypt: AssetsEncryptConfig? = null,
     )
 
     data class Result(
@@ -118,6 +119,9 @@ internal object BundleResourceObfuscateEngine {
 
         config.assetsProtect?.let { assetsConfig ->
             AssetsProtectionEngine.patchZipInPlace(config.outputAab, assetsConfig)
+        }
+        config.assetsEncrypt?.let { assetsEncryptConfig ->
+            ZipAssetEncryptor.patchZipInPlace(config.outputAab, assetsEncryptConfig, "base/assets/")
         }
 
         if (config.signing.isComplete) {

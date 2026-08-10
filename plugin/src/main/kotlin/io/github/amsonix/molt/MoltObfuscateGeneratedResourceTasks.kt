@@ -135,6 +135,12 @@ abstract class MoltObfuscateGenerateJunkKeepTask : DefaultTask() {
     @get:Input
     abstract val fogPackagePrefix: Property<String>
 
+    @get:Input
+    abstract val fogAssetsEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val fogAssetsPackagePrefix: Property<String>
+
     @get:OutputFile
     abstract val outputFile: RegularFileProperty
 
@@ -157,8 +163,70 @@ abstract class MoltObfuscateGenerateJunkKeepTask : DefaultTask() {
                     appendLine("# molt: generated fog keep rules")
                     appendLine("-keep class ${fogPackagePrefix.get()}.Fog { *; }")
                 }
+                if (fogAssetsEnabled.get()) {
+                    appendLine("# molt: generated fog-assets keep rules")
+                    appendLine("-keep class ${fogAssetsPackagePrefix.get()}.FogAssets { *; }")
+                    appendLine("-keep class ${fogAssetsPackagePrefix.get()}.FogAssetsInitializer { *; }")
+                }
             },
         )
+    }
+}
+
+@CacheableTask
+abstract class MoltObfuscateMergeFogAssetsManifestTask : DefaultTask() {
+
+    @get:Input
+    abstract val providerSnippet: Property<String>
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val mergedManifest: RegularFileProperty
+
+    @get:OutputFile
+    abstract val updatedManifest: RegularFileProperty
+
+    init {
+        group = "molt"
+        description = "Merge FogAssets ContentProvider into merged manifest"
+    }
+
+    @TaskAction
+    fun merge() {
+        val merged = mergedManifest.get().asFile.readText()
+        val snippet = providerSnippet.get()
+        val result = mergeProviderIntoManifest(merged, snippet)
+        if (result == null) {
+            error("molt: failed to merge FogAssets provider into merged manifest")
+        }
+        updatedManifest.get().asFile.writeText(result)
+    }
+
+    /** 把 snippet 中的 provider 节点并入 merged manifest 的 <application>。 */
+    private fun mergeProviderIntoManifest(mergedManifest: String, providerSnippet: String): String? =
+        runCatching {
+            val builder = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                .apply { isNamespaceAware = false }
+                .newDocumentBuilder()
+            val mergedDoc = builder.parse(org.xml.sax.InputSource(java.io.StringReader(mergedManifest)))
+            val snippetDoc = builder.parse(org.xml.sax.InputSource(java.io.StringReader(providerSnippet)))
+            val application = mergedDoc.getElementsByTagName("application").item(0)
+                ?: return@runCatching null
+            val provider = snippetDoc.documentElement
+            val imported = mergedDoc.importNode(provider, true)
+            application.appendChild(imported)
+            serialize(mergedDoc)
+        }.getOrNull()
+
+    private fun serialize(document: org.w3c.dom.Document): String {
+        val transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer()
+        transformer.setOutputProperty(javax.xml.transform.OutputKeys.INDENT, "yes")
+        val result = java.io.StringWriter()
+        transformer.transform(
+            javax.xml.transform.dom.DOMSource(document),
+            javax.xml.transform.stream.StreamResult(result),
+        )
+        return result.toString()
     }
 }
 

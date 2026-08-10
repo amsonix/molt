@@ -91,7 +91,7 @@ public final class DexInPlaceRenameEngine {
             DexRewritePlan rewritePlan,
             DexStringEncryptionConfig stringConfig
     ) throws IOException {
-        return remapBytes(input, mapping, rewritePlan, stringConfig, null);
+        return remapBytes(input, mapping, rewritePlan, stringConfig, null, null);
     }
 
     public static byte[] remapBytes(
@@ -101,10 +101,22 @@ public final class DexInPlaceRenameEngine {
             DexStringEncryptionConfig stringConfig,
             DexPerturbationConfig dexPerturb
     ) throws IOException {
+        return remapBytes(input, mapping, rewritePlan, stringConfig, dexPerturb, null);
+    }
+
+    public static byte[] remapBytes(
+            byte[] input,
+            RenameMapping mapping,
+            DexRewritePlan rewritePlan,
+            DexStringEncryptionConfig stringConfig,
+            DexPerturbationConfig dexPerturb,
+            AssetsEncryptConfig assetsEncrypt
+    ) throws IOException {
         boolean needsRename = !mapping.entries().isEmpty();
         boolean needsEncrypt = stringConfig != null;
         boolean needsPerturb = dexPerturb != null;
-        if (!needsRename && !needsEncrypt && !needsPerturb) {
+        boolean needsAssetsEncrypt = assetsEncrypt != null;
+        if (!needsRename && !needsEncrypt && !needsPerturb && !needsAssetsEncrypt) {
             return input;
         }
         DexRewritePlan plan = rewritePlan;
@@ -120,7 +132,8 @@ public final class DexInPlaceRenameEngine {
                 rewriteMapping,
                 plan.getPublicClassDescriptors(),
                 stringConfig,
-                dexPerturb
+                dexPerturb,
+                assetsEncrypt
         );
     }
 

@@ -24,6 +24,7 @@ object FeatureProbeAssertions {
         when (row.preset) {
             "arsc-dir", "arsc-file" -> assertArscMapping(root, row.preset)
             "keep-verify" -> assertKeepVerifyApk(root, agpVersion)
+            "assets-encrypt" -> assertAssetsEncrypt(root)
             "baseline-sync", "rename-full" -> if (row.featureId == "F13-baseline-sync") {
                 assertBaselineSyncApk(root)
             }
@@ -229,6 +230,72 @@ object FeatureProbeAssertions {
             return true
         }
         return false
+    }
+
+    private fun assertAssetsEncrypt(root: File) {
+        val apk = File(root, "app/build").walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".apk") && !it.name.startsWith("mapping-rewrite-") }
+            .maxWithOrNull(compareBy(File::lastModified))
+        assertTrue("transformed APK should exist for assets-encrypt probe", apk != null)
+        java.util.zip.ZipFile(apk!!).use { zf ->
+            val secret = zf.getInputStream(zf.getEntry("assets/secret.cfg")).use { it.readBytes() }
+            assertFalse(
+                "assets/secret.cfg must be encrypted",
+                String(secret, Charsets.UTF_8).contains("token=abc123"),
+            )
+            val dexBytes = java.io.ByteArrayOutputStream().apply {
+                zf.entries().asSequence()
+                    .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
+                    .forEach { entry -> zf.getInputStream(entry).use { write(it.readBytes()) } }
+            }.toByteArray()
+            val fogDescriptor = "Lfixture/app/shell/fogassets/FogAssets;"
+            assertTrue(
+                "FogAssets class must be present",
+                dexBytes.containsBytes(fogDescriptor.encodeToByteArray()),
+            )
+            val (fogOpenCalls, amOpenCalls, hasRead, hasMain) = analyzeOpenCalls(zf)
+            assertTrue(
+                "AssetManager.open must be rewritten to FogAssets.open " +
+                    "(FogOpenCalls=$fogOpenCalls AssetOpenCalls=$amOpenCalls read=$hasRead main=$hasMain)",
+                fogOpenCalls > 0 && amOpenCalls == 0,
+            )
+        }
+    }
+
+    private data class OpenCallStats(val fogOpenCalls: Int, val assetManagerOpenCalls: Int, val hasRead: Boolean, val hasMain: Boolean)
+
+    private fun analyzeOpenCalls(zf: java.util.zip.ZipFile): OpenCallStats {
+        var fogOpen = 0
+        var amOpen = 0
+        var hasRead = false
+        var hasMain = false
+        val fogDescriptor = "Lfixture/app/shell/fogassets/FogAssets;"
+        zf.entries().asSequence()
+            .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
+            .forEach { entry ->
+                val bytes = zf.getInputStream(entry).use { it.readBytes() }
+                hasRead = hasRead || bytes.containsBytes("read".encodeToByteArray())
+                hasMain = hasMain || bytes.containsBytes("fixture/app/MainActivity".encodeToByteArray())
+                val dexFile = org.jf.dexlib2.dexbacked.DexBackedDexFile.fromInputStream(
+                    null,
+                    java.io.BufferedInputStream(java.io.ByteArrayInputStream(bytes)),
+                )
+                for (clazz in dexFile.classes) {
+                    for (method in clazz.virtualMethods + clazz.directMethods) {
+                        val impl = method.implementation ?: continue
+                        for (ins in impl.instructions) {
+                            val ref = (ins as? org.jf.dexlib2.iface.instruction.ReferenceInstruction)
+                                ?.reference as? org.jf.dexlib2.iface.reference.MethodReference ?: continue
+                            if (ref.name != "open" || ref.parameterTypes != listOf("Ljava/lang/String;")) continue
+                            when (ref.definingClass) {
+                                fogDescriptor -> fogOpen++
+                                "Landroid/content/res/AssetManager;" -> amOpen++
+                            }
+                        }
+                    }
+                }
+            }
+        return OpenCallStats(fogOpen, amOpen, hasRead, hasMain)
     }
 
     private fun assertBaselineSyncApk(root: File) {

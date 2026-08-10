@@ -47,7 +47,7 @@ final class DexBinaryPatchWriter {
             Set<String> publicClassDescriptors,
             DexStringEncryptionConfig stringConfig
     ) throws IOException {
-        return patch(input, mapping, publicClassDescriptors, stringConfig, null);
+        return patch(input, mapping, publicClassDescriptors, stringConfig, null, null);
     }
 
     static byte[] patch(
@@ -57,10 +57,22 @@ final class DexBinaryPatchWriter {
             DexStringEncryptionConfig stringConfig,
             DexPerturbationConfig dexPerturb
     ) throws IOException {
+        return patch(input, mapping, publicClassDescriptors, stringConfig, dexPerturb, null);
+    }
+
+    static byte[] patch(
+            byte[] input,
+            RenameMapping mapping,
+            Set<String> publicClassDescriptors,
+            DexStringEncryptionConfig stringConfig,
+            DexPerturbationConfig dexPerturb,
+            AssetsEncryptConfig assetsEncrypt
+    ) throws IOException {
         if (mapping.entries().isEmpty()
                 && publicClassDescriptors.isEmpty()
                 && stringConfig == null
-                && dexPerturb == null) {
+                && dexPerturb == null
+                && assetsEncrypt == null) {
             return input;
         }
 
@@ -68,7 +80,8 @@ final class DexBinaryPatchWriter {
         DexTypeRewriter typeRewriter = new DexTypeRewriter(mapping);
         if (!anyTypeNeedsRewrite(dexFile, typeRewriter)
                 && !containsClassToPublicize(dexFile, publicClassDescriptors)
-                && !containsEncryptableClass(dexFile, stringConfig)) {
+                && !containsEncryptableClass(dexFile, stringConfig)
+                && !containsAssetsEncryptableClass(dexFile, assetsEncrypt)) {
             return input;
         }
 
@@ -95,6 +108,9 @@ final class DexBinaryPatchWriter {
                     && DexStringEncryptor.INSTANCE.shouldEncryptClass(classDef.getType(), stringConfig)) {
                 rewritten = DexStringEncryptor.INSTANCE.rewriteClassStrings(rewritten, stringConfig);
             }
+            if (assetsEncrypt != null) {
+                rewritten = DexAssetEncryptor.INSTANCE.rewriteClass(rewritten, assetsEncrypt);
+            }
             pool.internClass(rewritten);
         }
 
@@ -116,6 +132,13 @@ final class DexBinaryPatchWriter {
             }
         }
         return false;
+    }
+
+    private static boolean containsAssetsEncryptableClass(
+            DexBackedDexFile dexFile,
+            AssetsEncryptConfig assetsEncrypt
+    ) {
+        return assetsEncrypt != null && DexAssetEncryptor.INSTANCE.containsAssetsEncryptableClass(dexFile);
     }
 
     private static boolean anyTypeNeedsRewrite(

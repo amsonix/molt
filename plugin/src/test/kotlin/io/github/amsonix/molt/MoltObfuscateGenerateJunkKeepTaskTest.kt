@@ -21,6 +21,8 @@ class MoltObfuscateGenerateJunkKeepTaskTest {
             task.packagePrefix.set("sample.custom.junk")
             task.fogEnabled.set(false)
             task.fogPackagePrefix.set("sample.custom.fog")
+            task.fogAssetsEnabled.set(false)
+            task.fogAssetsPackagePrefix.set("sample.custom.fogassets")
             task.outputFile.set(project.layout.buildDirectory.file("junk-keep.pro"))
 
             task.generate()
@@ -44,6 +46,8 @@ class MoltObfuscateGenerateJunkKeepTaskTest {
             task.packagePrefix.set("sample.custom.junk")
             task.fogEnabled.set(true)
             task.fogPackagePrefix.set("sample.custom.fog")
+            task.fogAssetsEnabled.set(true)
+            task.fogAssetsPackagePrefix.set("sample.custom.fogassets")
             task.outputFile.set(project.layout.buildDirectory.file("junk-keep.pro"))
 
             task.generate()

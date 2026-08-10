@@ -36,6 +36,8 @@ internal object ZipPostR8RenameProcessor {
         val stringEncrypt: DexStringEncryptionConfig? = null,
         /** post-R8 DEX 垃圾指令注入；null = 关闭。 */
         val dexPerturb: DexPerturbationConfig? = null,
+        /** post-R8 AssetManager.open 调用点改写（assets 加密）；null = 关闭。 */
+        val assetsEncrypt: AssetsEncryptConfig? = null,
     )
 
     data class Result(
@@ -69,7 +71,9 @@ internal object ZipPostR8RenameProcessor {
         val resourceXmlMapping = mergeDexMapping(componentMapping, viewMapping)
         val stringEncrypt = config.stringEncrypt
         val dexPerturb = config.dexPerturb
-        val dexWorkEnabled = dexMapping != null || stringEncrypt != null || dexPerturb != null
+        val assetsEncrypt = config.assetsEncrypt
+        val dexWorkEnabled = dexMapping != null || stringEncrypt != null ||
+            dexPerturb != null || assetsEncrypt != null
 
         if (!dexWorkEnabled && componentMapping == null && viewMapping == null) {
             input.copyTo(output, overwrite = true)
@@ -94,6 +98,7 @@ internal object ZipPostR8RenameProcessor {
                     dexRewritePlan,
                     stringEncrypt,
                     config.dexPerturb,
+                    config.assetsEncrypt,
                 )
             }
         } else {
