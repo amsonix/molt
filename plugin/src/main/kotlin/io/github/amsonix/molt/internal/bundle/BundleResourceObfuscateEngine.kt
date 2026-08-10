@@ -41,6 +41,7 @@ internal object BundleResourceObfuscateEngine {
         val obfuscationMapping: File? = null,
         val assetsProtect: AssetsProtectionConfig? = null,
         val assetsEncrypt: AssetsEncryptConfig? = null,
+        val dexPerturb: DexPerturbationConfig? = null,
         /** 构建期告警回调（Gradle logger；java.util.logging 在 Gradle 不可见）。 */
         val onWarning: (String) -> Unit = {},
     )
@@ -87,11 +88,19 @@ internal object BundleResourceObfuscateEngine {
             projectPackagePrefixes = config.projectPackagePrefixes,
             excludeResXmlEntryPatterns = config.excludeResXmlEntryPatterns,
             stringEncrypt = config.stringEncrypt,
+            dexPerturb = config.dexPerturb,
+            assetsEncrypt = config.assetsEncrypt,
         )
-        val postR8Ran = postR8Config.componentMapping != null ||
+        // dex 改写开关：改名/字符串加密/控制流扰动/资产加密都会改写 dex（与 APK 路径语义一致）。
+        val dexWorkNeeded = postR8Config.componentMapping != null ||
             postR8Config.viewMapping != null ||
-            postR8Config.stringEncrypt != null
-        if (postR8Ran) {
+            postR8Config.stringEncrypt != null ||
+            config.dexPerturb != null ||
+            config.assetsEncrypt != null
+        // baseline profile 重编仅改名有意义（字符串加密不改变类名，空映射重编会让 profile 静默失效）。
+        val postR8Ran = postR8Config.componentMapping != null ||
+            postR8Config.viewMapping != null
+        if (dexWorkNeeded) {
             val postR8Result = ZipPostR8RenameProcessor.processZipInPlace(config.outputAab, postR8Config)
             dexFiles = postR8Result.dexFiles
             componentManifestFiles = postR8Result.componentManifestFiles

@@ -75,7 +75,8 @@ public final class ArtProfileSync {
             return new Result(false, "baseline-prof.txt missing, skip profile sync");
         }
         if (!zipContainsProfileEntries(zipFile)) {
-            return new Result(false, "artifact has no baseline.prof entry, skip profile sync");
+            // 产物无 baseline.prof：跳过不是失败（否则默认 failOnSyncFailure=true 会误杀构建）。
+            return new Result(true, "artifact has no baseline.prof entry, skip profile sync");
         }
         CompiledProfile compiled = compileProfile(zipFile, config);
         if (compiled == null) {

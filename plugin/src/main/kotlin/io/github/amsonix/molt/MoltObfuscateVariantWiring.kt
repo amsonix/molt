@@ -179,7 +179,7 @@ internal object MoltObfuscateVariantWiring {
                 .toTransform(SingleArtifact.MERGED_MANIFEST)
         }
 
-        if (junkConfig.mergeJunkManifest && junkConfig.activityCountPerPackage > 0) {
+        if (junkConfig.enabled && junkConfig.mergeJunkManifest && junkConfig.activityCountPerPackage > 0) {
             val mergeManifestTask =
                 project.tasks.register<MoltObfuscateMergeJunkManifestTask>(
                     "moltObfuscateMergeJunkManifest$capitalized",
