@@ -13,7 +13,7 @@ Discussed directions not yet scheduled, ordered by value.
 
 | Direction | Serves | Cost | Status |
 |-----------|--------|------|--------|
-| Config inlining (build-time small-config → encrypted constant classes, replacing most assets-encryption use) | Resource anti-extraction | 2-3 days | unscheduled |
+| ~~Config inlining~~ (rejected: no stronger protection — decrypt functions live in the same dex and are extractable; string constants are resident in memory (GC never frees) and bloat the dex. assets encryption decrypts on demand with bounded memory; stays the only scheme) | — | — | rejected |
 | Fog/FogAssets class-name randomization (auto-extraction target hardening) | Self-protection | half day | unscheduled |
 | Collect remaining java.util.logging sites (AssetsProtectionEngine etc., 8 files) into Gradle logger | Warning visibility | half day | unscheduled |
 | Promote cross-agp 9.3.0 probe rows to gate | Compatibility regression | 30 min | unscheduled |
