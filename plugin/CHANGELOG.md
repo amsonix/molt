@@ -33,6 +33,8 @@
 
 - **图片 anti-detect 验证盲区闭合**：transform 阶段 metadata 兜底注入记录（entry + md5）写入独立 report（APK/AAB 隔离，叠加 overlay 共享 report）——`verifyApkImageAntiDetect` / `verifyBundleImageAntiDetect` 现在校验兜底注入未丢失（此前仅校验可解码，注入静默失效不报错）
 
+- **DEX 控制流扰动**（`dexPerturb { }`）：post-R8 向工程包类方法体注入 `nop` 垃圾指令（`light`/`medium`/`heavy` 量级，seed 确定性，跨构建不同）；与 rename/字符串加密共用同一趟 dexlib2 重建；零运行时影响
+
 ### Docs
 
 - AGP 支持下限更新为 **8.0.0**：2026-08-07 单独探测 AGP 8.0.0 + Gradle 8.0（smoke / APK / AAB / rename 共 5/5 PASS）；README / COMPATIBILITY 双语同步

@@ -29,6 +29,7 @@ import io.github.amsonix.molt.internal.bundle.BundleResourceObfuscateEngine
 import io.github.amsonix.molt.internal.bundle.KeepWhitelistConverter
 import io.github.amsonix.molt.internal.bundle.SigningConfigSnapshot
 import io.github.amsonix.molt.internal.bundle.MoltObfuscateBaselineProfileSync
+import io.github.amsonix.molt.internal.bundle.DexPerturbationConfig
 import io.github.amsonix.molt.internal.bundle.DexStringEncryptionConfig
 import io.github.amsonix.molt.internal.bundle.DexStringEncryptor
 import io.github.amsonix.molt.internal.bundle.StringEncryptConfigFactory
@@ -183,6 +184,12 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
     abstract val fogDescriptor: Property<String>
 
     @get:Input
+    abstract val dexPerturbEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val dexPerturbIntensity: Property<String>
+
+    @get:Input
     abstract val assetsProtectEnabled: Property<Boolean>
 
     @get:Input
@@ -319,7 +326,13 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
             projectPackagePrefixes = projectPackagePrefixes.get(),
             excludeResXmlEntryPatterns = excludeResXmlEntryPatterns.get(),
             stringEncrypt = buildStringEncryptConfig(bundleImageSeed.get()),
+            dexPerturb = buildDexPerturbConfig(bundleImageSeed.get()),
         )
+    }
+
+    private fun buildDexPerturbConfig(seedValue: Int): DexPerturbationConfig? {
+        if (!dexPerturbEnabled.get()) return null
+        return DexPerturbationConfig(seed = seedValue, intensity = dexPerturbIntensity.get())
     }
 
     private fun buildStringEncryptConfig(seedValue: Int): DexStringEncryptionConfig? {
@@ -509,6 +522,12 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
     abstract val fogDescriptor: Property<String>
 
     @get:Input
+    abstract val dexPerturbEnabled: Property<Boolean>
+
+    @get:Input
+    abstract val dexPerturbIntensity: Property<String>
+
+    @get:Input
     abstract val assetsProtectEnabled: Property<Boolean>
 
     @get:Input
@@ -680,7 +699,13 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
             projectPackagePrefixes = projectPackagePrefixes.get(),
             excludeResXmlEntryPatterns = excludeResXmlEntryPatterns.get(),
             stringEncrypt = buildStringEncryptConfig(seed.get()),
+            dexPerturb = buildDexPerturbConfig(seed.get()),
         )
+    }
+
+    private fun buildDexPerturbConfig(seedValue: Int): DexPerturbationConfig? {
+        if (!dexPerturbEnabled.get()) return null
+        return DexPerturbationConfig(seed = seedValue, intensity = dexPerturbIntensity.get())
     }
 
     private fun buildStringEncryptConfig(seedValue: Int): DexStringEncryptionConfig? {

@@ -339,6 +339,8 @@ internal object MoltObfuscateVariantWiring {
                 assetsProtectFilePatterns.set(extension.assetsProtect.filePatterns)
                 assetsProtectJunkFileCount.set(extension.assetsProtect.junkFileCount)
                 assetsProtectExcludePatterns.set(extension.assetsProtect.excludePatterns)
+                dexPerturbEnabled.set(variantSettings.dexPerturbEnabled)
+                dexPerturbIntensity.set(extension.dexPerturb.intensity)
                 signing.storeFile?.let(signingStoreFile::set)
                 signingStorePassword.set(signing.storePassword.orEmpty())
                 signingKeyAlias.set(signing.keyAlias.orEmpty())
@@ -416,6 +418,8 @@ internal object MoltObfuscateVariantWiring {
                 assetsProtectFilePatterns.set(extension.assetsProtect.filePatterns)
                 assetsProtectJunkFileCount.set(extension.assetsProtect.junkFileCount)
                 assetsProtectExcludePatterns.set(extension.assetsProtect.excludePatterns)
+                dexPerturbEnabled.set(variantSettings.dexPerturbEnabled)
+                dexPerturbIntensity.set(extension.dexPerturb.intensity)
                 wireIncrementalMappingInputs(
                     project = project,
                     collection = incrementalMappingFiles,

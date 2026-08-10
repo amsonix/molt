@@ -50,6 +50,8 @@ molt {
     allowUnsignedOutput.set(true)
     syncBaselineProfile.set(false)
     stringEncrypt.enabled.set(true)
+    dexPerturb.enabled.set(true)
+    dexPerturb.intensity.set("medium")
     assetsProtect.enabled.set(true)
     assetsProtect.filePatterns.set(['*.json'])
     assetsProtect.junkFileCount.set(2)

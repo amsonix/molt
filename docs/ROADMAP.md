@@ -8,7 +8,7 @@ Discussed directions not yet scheduled, ordered by value.
 |-----------|--------|------|--------|
 
 | Assets text encryption tier (declared manifest + Fog key + runtime decode helper) | Resource anti-extraction | 1 day | unscheduled |
-| DEX control-flow perturbation (basic-block reorder / junk instructions / reflection wrapping) | Reverse-engineering resistance / differentiation | 2-3 days | unscheduled |
+
 
 
 

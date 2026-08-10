@@ -34,6 +34,8 @@ internal object ZipPostR8RenameProcessor {
         val excludeResXmlEntryPatterns: List<String> = emptyList(),
         /** post-R8 DEX 字符串加密；null = 关闭。 */
         val stringEncrypt: DexStringEncryptionConfig? = null,
+        /** post-R8 DEX 垃圾指令注入；null = 关闭。 */
+        val dexPerturb: DexPerturbationConfig? = null,
     )
 
     data class Result(
@@ -66,7 +68,8 @@ internal object ZipPostR8RenameProcessor {
         val dexMapping = mergeDexMapping(componentMapping, viewMapping)
         val resourceXmlMapping = mergeDexMapping(componentMapping, viewMapping)
         val stringEncrypt = config.stringEncrypt
-        val dexWorkEnabled = dexMapping != null || stringEncrypt != null
+        val dexPerturb = config.dexPerturb
+        val dexWorkEnabled = dexMapping != null || stringEncrypt != null || dexPerturb != null
 
         if (!dexWorkEnabled && componentMapping == null && viewMapping == null) {
             input.copyTo(output, overwrite = true)
@@ -90,6 +93,7 @@ internal object ZipPostR8RenameProcessor {
                     dexMapping ?: RenameMapping.fromForward(emptyMap()),
                     dexRewritePlan,
                     stringEncrypt,
+                    config.dexPerturb,
                 )
             }
         } else {
