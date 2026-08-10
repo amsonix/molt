@@ -2,7 +2,7 @@
 # Columns: feature_id  preset  probe  agp  gradle  tier  required
 #
 # probe:  smoke | apk | aab | apk-rename | aab-rename | runtime | all | sample | integration
-# tier:   gate (PR) | nightly | cross-agp (9.3.0 sanity) | weekly
+# tier:   gate (PR) | nightly | weekly
 #
 # Default AGP/Gradle unless row overrides. gate rows run on PR; nightly runs all rows.
 
@@ -32,10 +32,10 @@ F17-string-fog-aab    string-fog-assets aab-rename   8.13.2  8.13  nightly    0
 F19-runtime-smoke     string-fog-assets runtime      8.13.2  8.13  nightly    0
 F20-assets-encrypt    assets-encrypt   apk          8.13.2  8.13  nightly    0
 
-# --- cross-agp (9.3.0 bookend; weekly / release) ---
-F00-baseline          default         all          9.3.0   9.5   cross-agp  0
-F05-arsc-apk          default         apk          9.3.0   9.5   cross-agp  0
-F09-rename-apk        rename-full     apk-rename   9.3.0   9.5   cross-agp  0
+# --- cross-agp (9.3.0 bookend; gate = AGP 9 兼容性纳入 PR 回归) ---
+F00-baseline          default         all          9.3.0   9.5   gate       1
+F05-arsc-apk          default         apk          9.3.0   9.5   gate       1
+F09-rename-apk        rename-full     apk-rename   9.3.0   9.5   gate       1
 
 # --- weekly (real project smoke; skip when sample/integration root missing) ---
 F98-integration       default         integration  8.13.2  8.13  weekly     0

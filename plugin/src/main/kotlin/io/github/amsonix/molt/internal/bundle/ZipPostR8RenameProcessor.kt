@@ -38,6 +38,9 @@ internal object ZipPostR8RenameProcessor {
         val dexPerturb: DexPerturbationConfig? = null,
         /** post-R8 AssetManager.open 调用点改写（assets 加密）；null = 关闭。 */
         val assetsEncrypt: AssetsEncryptConfig? = null,
+        /** 构建期告警/信息回调（Gradle logger；java.util.logging 在 Gradle 不可见）。 */
+        val onWarning: (String) -> Unit = {},
+        val onInfo: (String) -> Unit = {},
     )
 
     data class Result(
@@ -184,11 +187,11 @@ internal object ZipPostR8RenameProcessor {
                 }
             }
         }
-        LOGGER.info(
+        config.onInfo(
             "post-R8 XML rewrite files=$xmlFiles, replacements=$xmlReplacementCount, failures=${xmlFailures.size}",
         )
         if (xmlFailures.isNotEmpty()) {
-            LOGGER.warning(
+            config.onWarning(
                 "post-R8 XML rewrite failures=${xmlFailures.size}, replacements=$xmlReplacementCount: " +
                     xmlFailures.joinToString { failure ->
                         "${failure.entryName}(${failure.formatStatus}: ${failure.reason})"
@@ -372,6 +375,4 @@ internal object ZipPostR8RenameProcessor {
 
     private fun isRuntimeNameCharacter(character: Char?): Boolean =
         character != null && (character.isLetterOrDigit() || character == '_' || character == '$' || character == '.')
-
-    private val LOGGER = Logger.getLogger(ZipPostR8RenameProcessor::class.java.name)
 }

@@ -42,8 +42,9 @@ internal object BundleResourceObfuscateEngine {
         val assetsProtect: AssetsProtectionConfig? = null,
         val assetsEncrypt: AssetsEncryptConfig? = null,
         val dexPerturb: DexPerturbationConfig? = null,
-        /** 构建期告警回调（Gradle logger；java.util.logging 在 Gradle 不可见）。 */
+        /** 构建期告警/信息回调（Gradle logger；java.util.logging 在 Gradle 不可见）。 */
         val onWarning: (String) -> Unit = {},
+        val onInfo: (String) -> Unit = {},
     )
 
     data class Result(
@@ -90,6 +91,8 @@ internal object BundleResourceObfuscateEngine {
             stringEncrypt = config.stringEncrypt,
             dexPerturb = config.dexPerturb,
             assetsEncrypt = config.assetsEncrypt,
+            onWarning = config.onWarning,
+            onInfo = config.onInfo,
         )
         // dex 改写开关：改名/字符串加密/控制流扰动/资产加密都会改写 dex（与 APK 路径语义一致）。
         val dexWorkNeeded = postR8Config.componentMapping != null ||
@@ -108,7 +111,7 @@ internal object BundleResourceObfuscateEngine {
         }
 
         MoltObfuscateBaselineProfileSync.maybeSync(
-            logger = java.util.logging.Logger.getLogger(BundleResourceObfuscateEngine::class.java.name),
+            logInfo = config.onInfo,
             zipFile = config.outputAab,
             syncEnabled = config.syncBaselineProfile,
             postR8Ran = postR8Ran,
@@ -125,8 +128,7 @@ internal object BundleResourceObfuscateEngine {
             perceptualNoise = config.imagePerceptualNoise,
         )
         if (patchedRecords.isNotEmpty()) {
-            java.util.logging.Logger.getLogger(BundleResourceObfuscateEngine::class.java.name)
-                .info("AAB image metadata fallback patched=${patchedRecords.size}")
+            config.onInfo("AAB image metadata fallback patched=${patchedRecords.size}")
         }
 
         config.assetsProtect?.let { assetsConfig ->

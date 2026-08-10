@@ -255,6 +255,7 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
                         junkFileCount = assetsProtectJunkFileCount.get(),
                         excludePatterns = assetsProtectExcludePatterns.get(),
                         assetsPrefix = "base/assets/",
+                        onInfo = { info -> logger.info("$name: $info") },
                     )
                 } else {
                     null
@@ -646,10 +647,16 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
             records = apkObfuscateResult.imagePatchRecords,
         )
         if (postR8Ran || dexWorkNeeded) {
-            ZipPostR8RenameProcessor.processZipInPlace(unsignedOut, postR8Config)
+            ZipPostR8RenameProcessor.processZipInPlace(
+                unsignedOut,
+                postR8Config.copy(
+                    onWarning = { warning -> logger.warn("$name: $warning") },
+                    onInfo = { info -> logger.info("$name: $info") },
+                ),
+            )
         }
         MoltObfuscateBaselineProfileSync.maybeSync(
-            logger = logger,
+            logInfo = { info -> logger.info("$name: $info") },
             zipFile = unsignedOut,
             syncEnabled = syncBaselineProfile.get(),
             postR8Ran = postR8Ran,
@@ -666,6 +673,7 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
                     junkFileCount = assetsProtectJunkFileCount.get(),
                     excludePatterns = assetsProtectExcludePatterns.get(),
                     assetsPrefix = "assets/",
+                    onInfo = { info -> logger.info("$name: $info") },
                 ),
             )
         }
