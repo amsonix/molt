@@ -183,16 +183,25 @@ public final class ApkResourceObfuscateEngine {
         public final int renamedEntryCount;
         public final int renamedPathCount;
         public final boolean tableRewritten;
+        public final java.util.List<io.github.amsonix.molt.internal.resource.ImagePatchRecord> imagePatchRecords;
 
-        public Result(int renamedEntryCount, int renamedPathCount, boolean tableRewritten) {
+        public Result(
+                int renamedEntryCount,
+                int renamedPathCount,
+                boolean tableRewritten,
+                java.util.List<io.github.amsonix.molt.internal.resource.ImagePatchRecord> imagePatchRecords
+        ) {
             this.renamedEntryCount = renamedEntryCount;
             this.renamedPathCount = renamedPathCount;
             this.tableRewritten = tableRewritten;
+            this.imagePatchRecords = imagePatchRecords;
         }
     }
 
     public static Result obfuscate(Config config) throws IOException {
         validateConfig(config);
+        java.util.List<io.github.amsonix.molt.internal.resource.ImagePatchRecord> lastRewriteRecords =
+                new java.util.ArrayList<>();
         File parent = config.outputApk.getParentFile();
         File tempDirectory = parent != null ? parent : config.inputApk.getAbsoluteFile().getParentFile();
         File protoInput = null;
@@ -225,7 +234,8 @@ public final class ApkResourceObfuscateEngine {
                     rewrittenTable,
                     plan.directoryNameMap,
                     plan.filePathMap,
-                    config
+                    config,
+                    lastRewriteRecords
             );
             Aapt2ApkConverter.convert(
                     config.aapt2Executable,
@@ -237,7 +247,8 @@ public final class ApkResourceObfuscateEngine {
             return new Result(
                     plan.entryNameMap.size(),
                     plan.filePathMap.size(),
-                    plan.hasChanges()
+                    plan.hasChanges(),
+                    lastRewriteRecords
             );
         } finally {
             if (protoInput != null) {
@@ -323,7 +334,8 @@ public final class ApkResourceObfuscateEngine {
             byte[] rewrittenTable,
             Map<String, String> directoryNameMap,
             Map<String, String> filePathMap,
-            Config config
+            Config config,
+            java.util.List<io.github.amsonix.molt.internal.resource.ImagePatchRecord> patchRecords
     ) throws IOException {
         try (ZipFile zipIn = new ZipFile(input);
              ZipOutputStream zipOut = new ZipOutputStream(
@@ -359,6 +371,15 @@ public final class ApkResourceObfuscateEngine {
                             true,
                             config.imagePerceptualNoise
                     );
+                    if (!Arrays.equals(original, patched)) {
+                        patchRecords.add(
+                                new io.github.amsonix.molt.internal.resource.ImagePatchRecord(
+                                        outputName,
+                                        io.github.amsonix.molt.internal.resource.ImageMetadataAntiDetectProcessor.INSTANCE.md5Hex(original),
+                                        io.github.amsonix.molt.internal.resource.ImageMetadataAntiDetectProcessor.INSTANCE.md5Hex(patched)
+                                )
+                        );
+                    }
                     ZipEntryWriter.writeBytes(
                             zipOut,
                             entry,
