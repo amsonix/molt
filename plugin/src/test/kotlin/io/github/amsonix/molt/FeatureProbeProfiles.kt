@@ -222,6 +222,10 @@ object FeatureProbeProfiles {
                 public java.io.InputStream read() throws java.io.IOException {
                     return getAssets().open("secret.cfg");
                 }
+
+                public java.io.InputStream read2() throws java.io.IOException {
+                    return getAssets().open("secret.cfg", 0);
+                }
             }
             """.trimIndent(),
         )

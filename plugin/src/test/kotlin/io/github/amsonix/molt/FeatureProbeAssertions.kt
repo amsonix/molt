@@ -286,7 +286,12 @@ object FeatureProbeAssertions {
                         for (ins in impl.instructions) {
                             val ref = (ins as? org.jf.dexlib2.iface.instruction.ReferenceInstruction)
                                 ?.reference as? org.jf.dexlib2.iface.reference.MethodReference ?: continue
-                            if (ref.name != "open" || ref.parameterTypes != listOf("Ljava/lang/String;")) continue
+                            if (ref.name != "open" || ref.returnType != "Ljava/io/InputStream;") continue
+                            if (ref.parameterTypes != listOf("Ljava/lang/String;") &&
+                                ref.parameterTypes != listOf("Ljava/lang/String;", "I")
+                            ) {
+                                continue
+                            }
                             when (ref.definingClass) {
                                 fogDescriptor -> fogOpen++
                                 "Landroid/content/res/AssetManager;" -> amOpen++

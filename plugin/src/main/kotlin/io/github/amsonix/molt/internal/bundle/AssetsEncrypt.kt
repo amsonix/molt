@@ -70,6 +70,10 @@ internal object FogAssetsSource {
                     }
                     return new java.io.ByteArrayInputStream(data);
                 }
+
+                public static java.io.InputStream open(String path, int mode) throws java.io.IOException {
+                    return open(path);
+                }
             }
         """.trimIndent()
         val initializer = """
@@ -130,7 +134,8 @@ internal object FogAssetsSource {
 internal object DexAssetEncryptor {
 
     private val ASSET_MANAGER = "Landroid/content/res/AssetManager;"
-    private val OPEN_SIGNATURE = listOf("Ljava/lang/String;")
+    private val OPEN_1ARG_SIGNATURE = listOf("Ljava/lang/String;")
+    private val OPEN_2ARG_SIGNATURE = listOf("Ljava/lang/String;", "I")
     private val RETURN_TYPE = "Ljava/io/InputStream;"
 
     fun containsAssetsEncryptableClass(dexFile: DexBackedDexFile): Boolean {
@@ -138,7 +143,7 @@ internal object DexAssetEncryptor {
             for (method in classDef.directMethods + classDef.virtualMethods) {
                 val implementation = method.implementation ?: continue
                 for (instruction in implementation.instructions) {
-                    if (assetManagerOpenCall(instruction)) return true
+                    if (assetManagerOpenCall(instruction) != null) return true
                 }
             }
         }
@@ -169,35 +174,49 @@ internal object DexAssetEncryptor {
         var changed = false
         for (index in instructions.indices) {
             val instruction = instructions[index]
-            val target = assetManagerOpenCall(instruction) ?: continue
-            // open(String)：invoke-virtual {AssetManager, path}——path 是第二个参数寄存器。
-            val register = when (instruction) {
+            val argCount = assetManagerOpenCall(instruction) ?: continue
+            // 仅当清单非空时改写（清单为空 = 功能关闭但类仍注入）。
+            if (config.filePatterns.isEmpty()) continue
+            // 参数寄存器：invoke-virtual {AssetManager, p0, p1...}——p0 是第二个寄存器。
+            val firstArgRegister = when (instruction) {
                 is org.jf.dexlib2.iface.instruction.FiveRegisterInstruction -> instruction.registerD
                 is org.jf.dexlib2.iface.instruction.RegisterRangeInstruction -> instruction.startRegister + 1
                 else -> continue
             }
-            // 仅当清单非空时改写（清单为空 = 功能关闭但类仍注入）。
-            if (config.filePatterns.isEmpty()) continue
-            if (register < 16) {
-                mmi.replaceInstruction(
-                    index,
+            val target = fogAssetsOpenMethod(config, argCount)
+            val rewritten = when {
+                firstArgRegister < 16 && argCount == 1 ->
                     BuilderInstruction35c(
                         Opcode.INVOKE_STATIC,
                         1,
-                        register,
+                        firstArgRegister,
                         0,
                         0,
                         0,
                         0,
-                        fogAssetsOpenMethod(config),
-                    ),
-                )
-            } else {
-                mmi.replaceInstruction(
-                    index,
-                    BuilderInstruction3rc(Opcode.INVOKE_STATIC_RANGE, register, 1, fogAssetsOpenMethod(config)),
-                )
+                        target,
+                    )
+                firstArgRegister < 16 ->
+                    // 35c 保证所有寄存器 < 16：mode 寄存器 = registerE。
+                    BuilderInstruction35c(
+                        Opcode.INVOKE_STATIC,
+                        2,
+                        firstArgRegister,
+                        (instruction as org.jf.dexlib2.iface.instruction.FiveRegisterInstruction).registerE,
+                        0,
+                        0,
+                        0,
+                        target,
+                    )
+                else ->
+                    BuilderInstruction3rc(
+                        Opcode.INVOKE_STATIC_RANGE,
+                        firstArgRegister,
+                        argCount,
+                        target,
+                    )
             }
+            mmi.replaceInstruction(index, rewritten)
             changed = true
         }
         return if (changed) {
@@ -216,20 +235,28 @@ internal object DexAssetEncryptor {
         }
     }
 
-    private fun assetManagerOpenCall(instruction: Instruction): Boolean {
-        if (instruction !is ReferenceInstruction) return false
-        val reference = instruction.reference as? MethodReference ?: return false
-        return reference.definingClass == ASSET_MANAGER &&
-            reference.name == "open" &&
-            reference.parameterTypes == OPEN_SIGNATURE &&
-            reference.returnType == RETURN_TYPE
+    /** 命中 AssetManager.open 调用点，返回参数个数（1 或 2）。 */
+    private fun assetManagerOpenCall(instruction: Instruction): Int? {
+        if (instruction !is ReferenceInstruction) return null
+        val reference = instruction.reference as? MethodReference ?: return null
+        if (reference.definingClass != ASSET_MANAGER ||
+            reference.name != "open" ||
+            reference.returnType != RETURN_TYPE
+        ) {
+            return null
+        }
+        return when (reference.parameterTypes) {
+            OPEN_1ARG_SIGNATURE -> 1
+            OPEN_2ARG_SIGNATURE -> 2
+            else -> null
+        }
     }
 
-    private fun fogAssetsOpenMethod(config: AssetsEncryptConfig): MethodReference =
+    private fun fogAssetsOpenMethod(config: AssetsEncryptConfig, argCount: Int): MethodReference =
         ImmutableMethodReference(
             config.fogAssetsDescriptor,
             "open",
-            OPEN_SIGNATURE,
+            if (argCount == 2) OPEN_2ARG_SIGNATURE else OPEN_1ARG_SIGNATURE,
             RETURN_TYPE,
         )
 }
