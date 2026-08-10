@@ -74,23 +74,52 @@ internal object DexStringEncryptor {
                     return null;
                 }
                 char[] chars = s.toCharArray();
-                int salt = chars.length & 0xFF;
-                for (int i = 0; i < chars.length; i++) {
-                    chars[i] ^= (char) (KEY[i & 3] ^ salt ^ (i & 0xFF));
+                if (chars.length < 4) {
+                    return s;
                 }
-                return new String(chars);
+                // 每明文独立 key：密文前 4 个 char 为 key（随密文嵌入），其余为 XOR 密文。
+                int k0 = chars[0] & 0xFF;
+                int k1 = chars[1] & 0xFF;
+                int k2 = chars[2] & 0xFF;
+                int k3 = chars[3] & 0xFF;
+                int salt = (chars.length - 4) & 0xFF;
+                for (int i = 4; i < chars.length; i++) {
+                    int key = i % 4 == 0 ? k0 : i % 4 == 1 ? k1 : i % 4 == 2 ? k2 : k3;
+                    chars[i] ^= (char) (key ^ salt ^ (i & 0xFF));
+                }
+                return new String(chars, 4, chars.length - 4);
             }
         }
     """.trimIndent()
 
-    /** XOR 自逆：解密 = 再次应用同变换。盐由密文长度派生（解密端可复算），相同明文 -> 相同密文（保留 dex 字符串池去重）。 */
+    /**
+     * 每明文独立 key：key 由 (seed, 明文 hash) 派生并作为 4-char 前缀嵌入密文——
+     * 相同明文 -> 相同 key -> 相同密文（保留 dex 字符串池去重）；
+     * 不同明文 -> 不同 key（一个字符串被破不影响其余）。
+     * 解密 = 从密文取 key 后对剩余部分再应用同变换（XOR 自逆）。
+     */
     fun encrypt(plain: String, key: IntArray): String {
+        val perStringRandom = SeedRandom.create(
+            key[0] xor key[1] xor key[2] xor key[3],
+            "fog-key-${plain.hashCode()}",
+        )
+        val k0 = perStringRandom.nextInt() and 0xFF
+        val k1 = perStringRandom.nextInt() and 0xFF
+        val k2 = perStringRandom.nextInt() and 0xFF
+        val k3 = perStringRandom.nextInt() and 0xFF
         val salt = plain.length and 0xFF
+        val prefix = charArrayOf(k0.toChar(), k1.toChar(), k2.toChar(), k3.toChar())
         val chars = plain.toCharArray()
         for (i in chars.indices) {
-            chars[i] = (chars[i].code xor key[i and 3] xor salt xor (i and 0xFF)).toChar()
+            val keyByte = when (i and 3) {
+                0 -> k0
+                1 -> k1
+                2 -> k2
+                else -> k3
+            }
+            chars[i] = (chars[i].code xor keyByte xor salt xor (i and 0xFF)).toChar()
         }
-        return String(chars)
+        return String(prefix) + String(chars)
     }
 
     fun shouldEncrypt(string: String, config: DexStringEncryptionConfig): Boolean {

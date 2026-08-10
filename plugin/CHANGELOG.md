@@ -27,6 +27,10 @@
 - 修复 `assetsProtect`：JSON 注入用引号状态机定位对象闭合（字符串值内 `}` 不再干扰），嵌套空对象（`{"a": {}}`）场景改为注入顶层 `{` 后——此前会产生非法 JSON
 - 优化 `assetsProtect`：未命中扰动清单的 entry 走 `ZipEntryWriter.copy` 保留原始压缩流，避免全量重压缩（大 APK 构建提速）
 
+- **字符串加密强度升级**：每明文独立 key（seed+明文 hash 派生，4-char 前缀随密文嵌入）——不同明文不同 key（一个被破不影响其余），相同明文仍同 key（保留池去重）；`Fog.d` 从密文前缀取 key 解密
+
+- `assetsProtect` 增强：假字段名/假文件目录**去固定前缀**（`molt_`/`molt_junk_` → seed 派生无特征命名，抗白名单过滤）；默认覆盖扩到 `*.html` / `*.js` / `*.xml`
+
 ### Docs
 
 - AGP 支持下限更新为 **8.0.0**：2026-08-07 单独探测 AGP 8.0.0 + Gradle 8.0（smoke / APK / AAB / rename 共 5/5 PASS）；README / COMPATIBILITY 双语同步

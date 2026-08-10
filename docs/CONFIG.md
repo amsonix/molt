@@ -142,7 +142,7 @@ Lightweight `assets/` perturbation at transform time (APK `assets/`, AAB `base/a
 | Option | Type | Default | Description | Variant override |
 |--------|------|---------|-------------|------------------|
 | `enabled` | `Boolean` | `false` | Assets perturbation switch | ✓ |
-| `filePatterns` | `List<String>` | `*.json`, `*.txt`, `*.properties` | File-name globs to perturb; patterns containing `/` match full entry paths | — |
+| `filePatterns` | `List<String>` | `*.json`, `*.txt`, `*.properties`, `*.html`, `*.js`, `*.xml` | File-name globs to perturb; patterns containing `/` match full entry paths | — |
 | `junkFileCount` | `Int` | `3` | Number of injected junk files | — |
 | `excludePatterns` | `List<String>` | empty | File-name / path globs to skip | — |
 

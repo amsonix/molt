@@ -327,7 +327,7 @@ abstract class AssetsProtectExtension @Inject constructor(
 
     /** 参与扰动的文件名 glob（`*.json` 等）；含 `/` 的 pattern 按完整 entry 路径匹配。 */
     val filePatterns: ListProperty<String> = project.objects.listProperty(String::class.java).convention(
-        listOf("*.json", "*.txt", "*.properties"),
+        listOf("*.json", "*.txt", "*.properties", "*.html", "*.js", "*.xml"),
     )
 
     /** 注入的假文件数量。 */

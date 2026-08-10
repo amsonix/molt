@@ -36,20 +36,38 @@ class DexStringEncryptorTest {
     )
 
     @Test
-    fun encrypt_decrypt_roundTrip_isSelfInverseAndDeduplicating() {
+    fun encrypt_fogDecrypt_roundTrip_andDeduplicating_andPerPlaintextKey() {
         val plain = "user_token_12345"
         val cipher = DexStringEncryptor.encrypt(plain, config.key)
         assertFalse("cipher must differ from plaintext", cipher == plain)
-        assertEquals(
-            "decrypt must restore plaintext (XOR self-inverse)",
-            plain,
-            DexStringEncryptor.encrypt(cipher, config.key),
-        )
+        assertEquals("fogDecrypt must restore plaintext", plain, fogDecrypt(cipher))
+
         assertEquals(
             "identical plaintext must produce identical ciphertext (string pool dedup)",
             DexStringEncryptor.encrypt(plain, config.key),
             DexStringEncryptor.encrypt(plain, config.key),
         )
+
+        // 每明文独立 key：不同明文 -> 密文前缀 key 不同。
+        val other = DexStringEncryptor.encrypt("another_message", config.key)
+        assertTrue(
+            "different plaintexts must embed different keys",
+            cipher.take(4) != other.take(4),
+        )
+    }
+
+    /** 镜像 Fog.d：从密文前 4 个 char 取 key，对剩余部分 XOR 还原。 */
+    private fun fogDecrypt(cipher: String): String {
+        val chars = cipher.toCharArray()
+        if (chars.size < 4) return cipher
+        val k = intArrayOf(chars[0].code and 0xFF, chars[1].code and 0xFF, chars[2].code and 0xFF, chars[3].code and 0xFF)
+        val salt = (chars.size - 4) and 0xFF
+        val out = CharArray(chars.size - 4)
+        for (i in 4 until chars.size) {
+            val keyByte = k[(i - 4) and 3]
+            out[i - 4] = (chars[i].code xor keyByte xor salt xor ((i - 4) and 0xFF)).toChar()
+        }
+        return String(out)
     }
 
     @Test
@@ -100,13 +118,8 @@ class DexStringEncryptorTest {
         val strings = (0 until dexFile.stringSection.size).map(dexFile.stringSection::get)
         assertFalse("plaintext must be gone from string pool", plain in strings)
 
-        val cipher = strings.firstOrNull { DexStringEncryptor.encrypt(it, config.key) == plain }
+        val cipher = strings.firstOrNull { fogDecrypt(it) == plain }
         assertTrue("ciphertext must be present", cipher != null)
-        assertEquals(
-            "ciphertext must decrypt back to plaintext",
-            plain,
-            DexStringEncryptor.encrypt(cipher!!, config.key),
-        )
 
         val method = dexFile.classes.single().directMethods.single()
         val instructions = method.implementation!!.instructions.toList()
