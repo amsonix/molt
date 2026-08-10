@@ -310,6 +310,11 @@ internal object MoltObfuscateVariantWiring {
                         "shell-obfuscate/${variant.name}/image-anti-detect-report.txt",
                     ),
                 )
+                imageAntiDetectReportOutput.set(
+                    project.layout.buildDirectory.file(
+                        "shell-obfuscate/${variant.name}/bundle-image-anti-detect-report.txt",
+                    ),
+                )
                 excludeResXmlEntryPatterns.set(extension.viewRename.excludeResXmlEntryPatterns)
                 viewRenameEnabled.set(variantSettings.viewRenameEnabled)
                 viewMappingJson.set(prepareTask.flatMap { prepared -> prepared.viewMappingJson })
@@ -378,6 +383,11 @@ internal object MoltObfuscateVariantWiring {
                 imageAntiDetectReport.set(
                     project.layout.buildDirectory.file(
                         "shell-obfuscate/${variant.name}/image-anti-detect-report.txt",
+                    ),
+                )
+                imageAntiDetectReportOutput.set(
+                    project.layout.buildDirectory.file(
+                        "shell-obfuscate/${variant.name}/apk-image-anti-detect-report.txt",
                     ),
                 )
                 allowUnsignedOutput.set(extension.allowUnsignedOutput)

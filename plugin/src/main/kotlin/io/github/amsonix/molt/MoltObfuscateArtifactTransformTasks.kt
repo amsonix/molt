@@ -129,6 +129,10 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val imageAntiDetectReport: RegularFileProperty
 
+    @get:Optional
+    @get:OutputFile
+    abstract val imageAntiDetectReportOutput: RegularFileProperty
+
     @get:Input
     abstract val excludeResXmlEntryPatterns: org.gradle.api.provider.ListProperty<String>
 
@@ -203,7 +207,7 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
         val signing = resolveSigning()
         val mappingInput = incrementalMappingFiles.singleFileOrNull()
         val postR8Config = loadPostR8Config()
-        BundleResourceObfuscateEngine.obfuscate(
+        val obfuscateResult = BundleResourceObfuscateEngine.obfuscate(
             BundleResourceObfuscateEngine.Config(
                 inputAab = inputAab,
                 outputAab = outputBundle.get().asFile,
@@ -239,6 +243,11 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
                 },
             ),
         )
+        MoltObfuscateTransformVerify.appendImagePatchRecords(
+            overlayReport = imageAntiDetectReport.orNull?.asFile,
+            outputReport = imageAntiDetectReportOutput.orNull?.asFile,
+            records = obfuscateResult.imagePatchRecords,
+        )
         verifyBundleKeepIfEnabled(
             declaredKeepRules = declaredKeepRules,
             inputAab = inputAab,
@@ -248,7 +257,8 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
                 taskName = name,
                 logger = logger,
                 bundleFile = outputBundle.get().asFile,
-                reportFile = imageAntiDetectReport.orNull?.asFile,
+                reportFile = imageAntiDetectReportOutput.orNull?.asFile
+                    ?: imageAntiDetectReport.orNull?.asFile,
                 fail = failOnBundleImageAntiDetectFailure.get(),
             )
         }
@@ -427,6 +437,10 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val imageAntiDetectReport: RegularFileProperty
 
+    @get:Optional
+    @get:OutputFile
+    abstract val imageAntiDetectReportOutput: RegularFileProperty
+
     @get:Input
     abstract val allowUnsignedOutput: Property<Boolean>
 
@@ -554,7 +568,7 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
         outputApk.parentFile.mkdirs()
         val workDir = File(temporaryDir, inputApk.nameWithoutExtension).apply { mkdirs() }
         val unsignedOut = File(workDir, "unsigned.apk")
-        ApkResourceObfuscateEngine.obfuscate(
+        val apkObfuscateResult = ApkResourceObfuscateEngine.obfuscate(
             ApkResourceObfuscateEngine.Config(
                 inputApk,
                 unsignedOut,
@@ -568,6 +582,11 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
                 mappingInput,
                 mappingOutputDirectory.get().asFile,
             ),
+        )
+        MoltObfuscateTransformVerify.appendImagePatchRecords(
+            overlayReport = imageAntiDetectReport.orNull?.asFile,
+            outputReport = imageAntiDetectReportOutput.orNull?.asFile,
+            records = apkObfuscateResult.imagePatchRecords,
         )
         if (postR8Ran) {
             ZipPostR8RenameProcessor.processZipInPlace(unsignedOut, postR8Config)
@@ -619,7 +638,8 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
                 taskName = name,
                 logger = logger,
                 apkFile = outputApk,
-                reportFile = imageAntiDetectReport.orNull?.asFile,
+                reportFile = imageAntiDetectReportOutput.orNull?.asFile
+                    ?: imageAntiDetectReport.orNull?.asFile,
                 fail = failOnApkImageAntiDetectFailure.get(),
             )
         }

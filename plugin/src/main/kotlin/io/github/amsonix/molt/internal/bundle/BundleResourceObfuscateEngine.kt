@@ -6,6 +6,7 @@ import io.github.amsonix.molt.internal.reschiper.bundle.AppBundlePackager
 import io.github.amsonix.molt.internal.reschiper.bundle.AppBundleSigner
 import io.github.amsonix.molt.internal.reschiper.obfuscation.ResourcesObfuscator
 import io.github.amsonix.molt.internal.rename.RenameMapping
+import io.github.amsonix.molt.internal.resource.ImagePatchRecord
 import io.github.amsonix.molt.internal.resource.ZipImageEntryPatcher
 import java.io.File
 import java.nio.file.Files
@@ -47,6 +48,7 @@ internal object BundleResourceObfuscateEngine {
         val dexFiles: Int = 0,
         val componentManifestFiles: Int = 0,
         val viewLayoutFiles: Int = 0,
+        val imagePatchRecords: List<ImagePatchRecord> = emptyList(),
     )
 
     fun obfuscate(config: Config): Result {
@@ -102,16 +104,16 @@ internal object BundleResourceObfuscateEngine {
             failOnSyncFailure = config.failOnBaselineProfileSyncFailure,
         )
 
-        val patchedImages = ZipImageEntryPatcher.patchZipInPlace(
+        val patchedRecords = ZipImageEntryPatcher.patchZipInPlace(
             zipFile = config.outputAab,
             seed = config.imageSeed,
             metadataScope = config.metadataScope,
             enabled = config.imageAntiDetectBundleFallback,
             perceptualNoise = config.imagePerceptualNoise,
         )
-        if (patchedImages > 0) {
+        if (patchedRecords.isNotEmpty()) {
             java.util.logging.Logger.getLogger(BundleResourceObfuscateEngine::class.java.name)
-                .info("AAB image metadata fallback patched=$patchedImages")
+                .info("AAB image metadata fallback patched=${patchedRecords.size}")
         }
 
         config.assetsProtect?.let { assetsConfig ->
@@ -152,6 +154,7 @@ internal object BundleResourceObfuscateEngine {
             dexFiles = dexFiles,
             componentManifestFiles = componentManifestFiles,
             viewLayoutFiles = viewLayoutFiles,
+            imagePatchRecords = patchedRecords,
         )
     }
 }

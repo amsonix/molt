@@ -11,7 +11,7 @@ Discussed directions not yet scheduled, ordered by value.
 | DEX control-flow perturbation (basic-block reorder / junk instructions / reflection wrapping) | Reverse-engineering resistance / differentiation | 2-3 days | unscheduled |
 
 
-| Image anti-detect transform verify gap (fallback injection not recorded in report; only decodability checked) | Verification closure | half day | unscheduled |
+
 
 ## Low priority (on record)
 

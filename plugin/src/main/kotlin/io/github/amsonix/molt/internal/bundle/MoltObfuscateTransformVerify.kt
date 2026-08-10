@@ -201,6 +201,25 @@ internal object MoltObfuscateTransformVerify {
         }
     }
 
+    /**
+     * 将 transform 阶段图片 metadata 兜底注入记录追加到独立 report
+     * （= overlay 共享 report 内容 + 本次注入记录），供 verifyApk/BundleImageAntiDetect 校验注入未丢失。
+     */
+    fun appendImagePatchRecords(
+        overlayReport: File?,
+        outputReport: File?,
+        records: List<io.github.amsonix.molt.internal.resource.ImagePatchRecord>,
+    ) {
+        if (outputReport == null) return
+        val lines = mutableListOf<String>()
+        overlayReport?.takeIf { it.isFile }?.readLines()?.let { lines += it }
+        records.forEach { record ->
+            lines += "${record.entryName}\tPROCESSED\t${record.sourceMd5}\t${record.outputMd5}"
+        }
+        outputReport.parentFile?.mkdirs()
+        outputReport.writeText(lines.joinToString("\n") + "\n")
+    }
+
     private fun readProcessedMd5FromReport(report: File): Set<String> =
         report.readLines()
             .filter { it.contains('\t') && !it.startsWith("#") }

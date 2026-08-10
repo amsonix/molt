@@ -16,10 +16,10 @@ internal object ZipImageEntryPatcher {
         metadataScope: String,
         enabled: Boolean,
         perceptualNoise: Boolean = false,
-    ): Int {
-        if (!enabled || !zipFile.isFile) return 0
+    ): List<ImagePatchRecord> {
+        if (!enabled || !zipFile.isFile) return emptyList()
         val temp = File.createTempFile("shell-zip-image-patch", ".zip", zipFile.parentFile)
-        var patchedCount = 0
+        val records = mutableListOf<ImagePatchRecord>()
         try {
             ZipFile(zipFile).use { zipIn ->
                 ZipOutputStream(BufferedOutputStream(FileOutputStream(temp))).use { zipOut ->
@@ -35,7 +35,11 @@ internal object ZipImageEntryPatcher {
                                 perceptualNoise = perceptualNoise,
                             )
                             if (!patched.contentEquals(bytes)) {
-                                patchedCount++
+                                records += ImagePatchRecord(
+                                    entryName = entry.name,
+                                    sourceMd5 = io.github.amsonix.molt.internal.resource.ImageMetadataAntiDetectProcessor.md5Hex(bytes),
+                                    outputMd5 = io.github.amsonix.molt.internal.resource.ImageMetadataAntiDetectProcessor.md5Hex(patched),
+                                )
                             }
                             ZipEntryWriter.writeBytes(
                                 zipOut = zipOut,
@@ -56,13 +60,13 @@ internal object ZipImageEntryPatcher {
                     }
                 }
             }
-            if (patchedCount > 0) {
+            if (records.isNotEmpty()) {
                 temp.copyTo(zipFile, overwrite = true)
             }
         } finally {
             temp.delete()
         }
-        return patchedCount
+        return records
     }
 
     fun isPatchableImageEntry(name: String): Boolean {
@@ -70,3 +74,10 @@ internal object ZipImageEntryPatcher {
         return ApkImageEntryPatcher.isImageEntry(name)
     }
 }
+
+/** transform 阶段图片 metadata 兜底注入记录（供 verify 校验注入未丢失）。 */
+internal data class ImagePatchRecord(
+    val entryName: String,
+    val sourceMd5: String,
+    val outputMd5: String,
+)
