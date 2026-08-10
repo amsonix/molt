@@ -121,6 +121,15 @@ Simple names change too — not package-only renames.
 | `enabled` | `Boolean` | `true` | Rename Activity / Service / Receiver / Provider | ✓ |
 | `excludePatterns` | `List<String>` | `*.debug.*`, `*Hilt_*`, `*_HiltModules*` | FQCN globs to skip | — |
 
+## `dexPerturb { }`
+
+Post-R8 DEX control-flow perturbation: injects `nop` junk instructions into method bodies of project-package classes (same class set as string encryption), using the shared dexlib2 rebuild with automatic offset fixing. Deterministic per seed — every build differs. Zero runtime behavior change (nop has no side effects).
+
+| Option | Type | Default | Description | Variant override |
+|--------|------|---------|-------------|------------------|
+| `enabled` | `Boolean` | `false` | DEX perturbation switch | ✓ |
+| `intensity` | `String` | `light` | Nops per method: `light` 1-3 / `medium` 3-8 / `heavy` 8-20 | — |
+
 ## `stringEncrypt { }`
 
 Post-R8 DEX string encryption: `const-string` is replaced with a `Fog.d(...)` decrypt call (`const-string-jumbo` ciphertext + `invoke-static` + `move-result-object`, same register). Only strings in **project packages** (`projectPackagePrefixes`) are encrypted by default; the auto-generated `{applicationId}.shell.fog.Fog` decryption class is kept via generated ProGuard rules.

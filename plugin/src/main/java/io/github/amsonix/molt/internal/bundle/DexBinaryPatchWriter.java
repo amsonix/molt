@@ -30,7 +30,7 @@ final class DexBinaryPatchWriter {
     }
 
     static byte[] patch(byte[] input, RenameMapping mapping) throws IOException {
-        return patch(input, mapping, Collections.emptySet(), null);
+        return patch(input, mapping, Collections.emptySet(), null, null);
     }
 
     static byte[] patch(
@@ -38,7 +38,7 @@ final class DexBinaryPatchWriter {
             RenameMapping mapping,
             Set<String> publicClassDescriptors
     ) throws IOException {
-        return patch(input, mapping, publicClassDescriptors, null);
+        return patch(input, mapping, publicClassDescriptors, null, null);
     }
 
     static byte[] patch(
@@ -47,9 +47,20 @@ final class DexBinaryPatchWriter {
             Set<String> publicClassDescriptors,
             DexStringEncryptionConfig stringConfig
     ) throws IOException {
+        return patch(input, mapping, publicClassDescriptors, stringConfig, null);
+    }
+
+    static byte[] patch(
+            byte[] input,
+            RenameMapping mapping,
+            Set<String> publicClassDescriptors,
+            DexStringEncryptionConfig stringConfig,
+            DexPerturbationConfig dexPerturb
+    ) throws IOException {
         if (mapping.entries().isEmpty()
                 && publicClassDescriptors.isEmpty()
-                && stringConfig == null) {
+                && stringConfig == null
+                && dexPerturb == null) {
             return input;
         }
 
@@ -74,6 +85,11 @@ final class DexBinaryPatchWriter {
             if (publicClassDescriptors.contains(classDef.getType())
                     && !AccessFlags.PUBLIC.isSet(rewritten.getAccessFlags())) {
                 rewritten = publicClassDef(rewritten);
+            }
+            boolean perturbClass = dexPerturb != null
+                    && DexStringEncryptor.INSTANCE.shouldEncryptClass(classDef.getType(), stringConfig);
+            if (perturbClass) {
+                rewritten = DexPerturber.INSTANCE.rewriteClass(rewritten, dexPerturb);
             }
             if (stringConfig != null
                     && DexStringEncryptor.INSTANCE.shouldEncryptClass(classDef.getType(), stringConfig)) {

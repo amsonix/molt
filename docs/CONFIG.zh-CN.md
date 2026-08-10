@@ -105,6 +105,15 @@ APK / AAB 内 `resources.arsc` 与 res 路径混淆。
 | `mappingFile` | `File` | 自动生成 | 增量复用的 `resources-mapping.txt` | — |
 | `reuseIncrementalMapping` | `Boolean` | `true` | 自动复用上次 Transform 的 mapping。**注意**：开启时修改 `seed` **不会**重新随机化资源名（已有条目保留旧名，仅 junk / 组件 / View 名跟随新 seed）；删除 `build/shell-obfuscate/<variant>/{apk,bundle}-resource/resources-mapping.txt` 可强制全量重滚 | — |
 
+## `dexPerturb { }`
+
+R8 完成后对 DEX 做控制流扰动：向工程包类（与字符串加密同集合）的方法体注入 `nop` 垃圾指令，共用 dexlib2 重建（偏移自动修正）。seed 确定性——每构建不同；零运行时行为影响（nop 无副作用）。
+
+| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
+|------|------|--------|------|----------------|
+| `enabled` | `Boolean` | `false` | DEX 扰动开关 | ✓ |
+| `intensity` | `String` | `light` | 每方法 nop 数：`light` 1-3 / `medium` 3-8 / `heavy` 8-20 | — |
+
 ## `stringEncrypt { }`
 
 R8 完成后对 DEX 做字符串加密：`const-string` 替换为 `Fog.d(...)` 解密调用（`const-string-jumbo` 密文 + `invoke-static` + `move-result-object`，复用同一寄存器）。默认仅加密**工程包**（`projectPackagePrefixes`）内的字符串；自动生成的 `{applicationId}.shell.fog.Fog` 解密类由生成的 ProGuard keep 规则保活。

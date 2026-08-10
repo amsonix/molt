@@ -151,6 +151,10 @@ abstract class MoltObfuscateExtension @Inject constructor(
     val assetsProtect: AssetsProtectExtension =
         project.objects.newInstance(AssetsProtectExtension::class.java)
 
+    /** post-R8 DEX 控制流扰动（垃圾指令注入，seed 确定性）。 */
+    val dexPerturb: DexPerturbExtension =
+        project.objects.newInstance(DexPerturbExtension::class.java)
+
     /** post-R8 DEX 改写后按 HRF + 合成 mapping 重编 baseline.prof / baseline.profm。 */
     val syncBaselineProfile: Property<Boolean> =
         project.objects.property(Boolean::class.java).convention(true)
@@ -237,6 +241,9 @@ abstract class MoltObfuscateVariantConfig @Inject constructor(
 
     val assetsProtect: AssetsProtectVariantOverrideExtension =
         objects.newInstance(AssetsProtectVariantOverrideExtension::class.java)
+
+    val dexPerturb: DexPerturbVariantOverrideExtension =
+        objects.newInstance(DexPerturbVariantOverrideExtension::class.java)
 }
 
 /** variantConfig { create("googleRelease") { junkCode { profile.set("heavy") } } } */
@@ -338,6 +345,23 @@ abstract class AssetsProtectExtension @Inject constructor(
 }
 
 abstract class AssetsProtectVariantOverrideExtension @Inject constructor(
+    private val project: org.gradle.api.Project,
+) {
+    val enabled: Property<Boolean> = project.objects.property(Boolean::class.java)
+}
+
+/** post-R8 DEX 控制流扰动 DSL。 */
+abstract class DexPerturbExtension @Inject constructor(
+    private val project: org.gradle.api.Project,
+) {
+    /** 总开关；默认 false。 */
+    val enabled: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
+    /** 注入量级：`light`（每方法 1-3 条）/ `medium`（3-8）/ `heavy`（8-20）。 */
+    val intensity: Property<String> = project.objects.property(String::class.java).convention("light")
+}
+
+abstract class DexPerturbVariantOverrideExtension @Inject constructor(
     private val project: org.gradle.api.Project,
 ) {
     val enabled: Property<Boolean> = project.objects.property(Boolean::class.java)
@@ -527,6 +551,7 @@ internal fun MoltObfuscateExtension.resolveVariantSettings(
         globalViewRenameEnabled = viewRename.enabled.get(),
         globalStringEncryptEnabled = stringEncrypt.enabled.get(),
         globalAssetsProtectEnabled = assetsProtect.enabled.get(),
+        globalDexPerturbEnabled = dexPerturb.enabled.get(),
         variantResourceObfuscateEnabled = override?.resourceObfuscate?.enabled?.optional(),
         variantVerifyApkKeep = override?.verify?.verifyApkKeep?.optional(),
         variantVerifyBundleKeep = override?.verify?.verifyBundleKeep?.optional(),
@@ -536,5 +561,6 @@ internal fun MoltObfuscateExtension.resolveVariantSettings(
         variantViewRenameEnabled = override?.viewRename?.enabled?.optional(),
         variantStringEncryptEnabled = override?.stringEncrypt?.enabled?.optional(),
         variantAssetsProtectEnabled = override?.assetsProtect?.enabled?.optional(),
+        variantDexPerturbEnabled = override?.dexPerturb?.enabled?.optional(),
     )
 }

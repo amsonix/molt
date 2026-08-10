@@ -19,6 +19,7 @@ class VariantSettingsResolverTest {
             globalViewRenameEnabled = false,
             globalStringEncryptEnabled = true,
             globalAssetsProtectEnabled = false,
+            globalDexPerturbEnabled = false,
         )
         assertTrue(resolved.resourceObfuscateEnabled)
         assertFalse(resolved.verifyApkKeep)
@@ -40,6 +41,7 @@ class VariantSettingsResolverTest {
             globalViewRenameEnabled = true,
             globalStringEncryptEnabled = true,
             globalAssetsProtectEnabled = true,
+            globalDexPerturbEnabled = true,
             variantResourceObfuscateEnabled = false,
             variantVerifyApkKeep = false,
             variantObfuscateApk = false,
@@ -47,6 +49,7 @@ class VariantSettingsResolverTest {
             variantViewRenameEnabled = false,
             variantStringEncryptEnabled = false,
             variantAssetsProtectEnabled = false,
+            variantDexPerturbEnabled = false,
         )
         assertFalse(resolved.resourceObfuscateEnabled)
         assertFalse(resolved.verifyApkKeep)

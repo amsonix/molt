@@ -10,6 +10,7 @@ internal data class ResolvedVariantSettings(
     val viewRenameEnabled: Boolean,
     val stringEncryptEnabled: Boolean,
     val assetsProtectEnabled: Boolean,
+    val dexPerturbEnabled: Boolean,
 )
 
 /** variantConfig 覆盖全局 resource / verify / bundle / rename 开关。 */
@@ -25,6 +26,7 @@ internal object VariantSettingsResolver {
         globalViewRenameEnabled: Boolean,
         globalStringEncryptEnabled: Boolean,
         globalAssetsProtectEnabled: Boolean,
+        globalDexPerturbEnabled: Boolean,
         variantResourceObfuscateEnabled: Boolean? = null,
         variantVerifyApkKeep: Boolean? = null,
         variantVerifyBundleKeep: Boolean? = null,
@@ -34,6 +36,7 @@ internal object VariantSettingsResolver {
         variantViewRenameEnabled: Boolean? = null,
         variantStringEncryptEnabled: Boolean? = null,
         variantAssetsProtectEnabled: Boolean? = null,
+        variantDexPerturbEnabled: Boolean? = null,
     ): ResolvedVariantSettings = ResolvedVariantSettings(
         resourceObfuscateEnabled = variantResourceObfuscateEnabled ?: globalResourceObfuscateEnabled,
         verifyApkKeep = variantVerifyApkKeep ?: globalVerifyApkKeep,
@@ -45,5 +48,6 @@ internal object VariantSettingsResolver {
         viewRenameEnabled = variantViewRenameEnabled ?: globalViewRenameEnabled,
         stringEncryptEnabled = variantStringEncryptEnabled ?: globalStringEncryptEnabled,
         assetsProtectEnabled = variantAssetsProtectEnabled ?: globalAssetsProtectEnabled,
+        dexPerturbEnabled = variantDexPerturbEnabled ?: globalDexPerturbEnabled,
     )
 }
