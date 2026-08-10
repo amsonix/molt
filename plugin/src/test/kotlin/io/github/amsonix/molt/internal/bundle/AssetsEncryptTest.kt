@@ -803,6 +803,87 @@ class AssetsEncryptTest {
         }
     }
 
+    @Test
+    fun mediaExtensionSet_coversAaptFontsAndWebp() {
+        val owner = "Lcom/example/app/Main;"
+        val openCall = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "open",
+                listOf("Ljava/lang/String;"),
+                "Ljava/io/InputStream;",
+            ),
+        )
+        val zip = File.createTempFile("molt-assets-test", ".apk")
+        try {
+            java.util.zip.ZipOutputStream(zip.outputStream().buffered()).use { zout ->
+                val extensions = listOf("font.ttf", "font.otf", "font.ttc", "image.webp", "video.mp4", "sound.mp3")
+                for ((index, name) in extensions.withIndex()) {
+                    val constString = ImmutableInstruction21c(
+                        Opcode.CONST_STRING,
+                        1,
+                        ImmutableStringReference(name),
+                    )
+                    val clazz = ImmutableClassDef(
+                        owner,
+                        AccessFlags.PUBLIC.value,
+                        "Ljava/lang/Object;",
+                        emptyList(),
+                        null,
+                        emptyList(),
+                        emptyList(),
+                        emptyList(),
+                        listOf(
+                            ImmutableMethod(
+                                owner,
+                                "read",
+                                emptyList(),
+                                "Ljava/io/InputStream;",
+                                AccessFlags.PUBLIC.value,
+                                emptySet(),
+                                emptySet(),
+                                ImmutableMethodImplementation(
+                                    2,
+                                    listOf(constString, openCall, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                                    emptyList(),
+                                    emptyList(),
+                                ),
+                            ),
+                        ),
+                        emptyList(),
+                    )
+                    val dexBytes = buildDex(clazz)
+                    zout.putNextEntry(java.util.zip.ZipEntry("classes${index}.dex"))
+                    zout.write(dexBytes)
+                    zout.closeEntry()
+                    zout.putNextEntry(java.util.zip.ZipEntry("assets/$name"))
+                    zout.write("PLAINTEXT".encodeToByteArray())
+                    zout.closeEntry()
+                }
+            }
+            val result = ZipAssetEncryptor.patchZipInPlace(
+                zip,
+                config.copy(filePatterns = listOf("*.ttf", "*.otf", "*.ttc", "*.webp", "*.mp4", "*.mp3")),
+                "assets/",
+            )
+            assertEquals(0, result.encrypted)
+            assertEquals(
+                "AAPT no-compress 集合必须覆盖字体(ttf/otf/ttc)与 webp（AGP 8.0/8.13 实证新增）",
+                6,
+                result.mediaSkipped,
+            )
+        } finally {
+            zip.delete()
+        }
+    }
+
     private fun buildDex(vararg classes: org.jf.dexlib2.iface.ClassDef): ByteArray {
         val pool = DexPool(Opcodes.getDefault())
         classes.forEach(pool::internClass)

@@ -338,15 +338,19 @@ internal object ZipAssetEncryptor {
     private val WEBVIEW_ASSET_REFERENCE = Regex("""file:///android_asset/[^"'\s)]+""")
 
     /**
-     * AAPT2 硬编码默认 no-compress 扩展名（cmd/Link.cpp，android-9.0.0_r1 起各版本一致）。
-     * 媒体文件不压缩 = openFd/mmap 友好——加密它们必然破坏播放/映射场景（要播必须可解码），
+     * AAPT2 默认 no-compress 扩展名。媒体不压缩 = openFd/mmap 友好——加密它们必然破坏播放/映射场景，
      * 作为"意图层"硬排除：清单命中的媒体文件不加密，即使存在 open() 调用点。
+     *
+     * 基线 = AAPT2 cmd/Link.cpp 硬编码列表（android-9.0.0_r1 起）。
+     * 实证（本地 aapt2 二进制 strings 提取）：AGP 8.0 起含 .webp；
+     * AGP 8.13（aapt2 2.20）起新增 .ttf/.otf/.ttc（字体 no-compress，openFd/mmap 加载字体的常用路径）。
      */
     private val AAPT2_NO_COMPRESS_EXTENSIONS = setOf(
-        ".jpg", ".jpeg", ".png", ".gif", ".wav", ".mp2", ".mp3", ".ogg",
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".wav", ".mp2", ".mp3", ".ogg",
         ".aac", ".mpg", ".mpeg", ".mid", ".midi", ".smf", ".jet", ".rtttl",
         ".imy", ".xmf", ".mp4", ".m4a", ".m4v", ".3gp", ".3gpp", ".3g2",
         ".3gpp2", ".amr", ".awb", ".wma", ".wmv", ".webm", ".mkv",
+        ".ttf", ".otf", ".ttc",
     )
 
     private fun isAaptNoCompressAsset(path: String): Boolean =
