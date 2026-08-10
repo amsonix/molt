@@ -40,11 +40,17 @@ internal object MappingMerger {
                 match.groupValues[1] + shellTarget + match.groupValues[4]
             }
         }
-        val merged = rewriteResidualSignatures(mergedClassHeaders, residualTypeMapping)
-        val missingLines = shellMapping.entries()
+        // 追加类（keep 且未被 R8 收录）也要进 residualTypeMapping：
+        // 否则 residual signature 中的类型引用与 DEX 实际名不一致（调试元数据错乱）。
+        val missingEntries = shellMapping.entries()
             .filterNot { it.original in mappedOriginals }
             .sortedBy { it.original }
-            .map { "${it.original} -> ${it.obfuscated}:" }
+        for (entry in missingEntries) {
+            residualTypeMapping[entry.original.replace('.', '/')] =
+                entry.obfuscated.replace('.', '/')
+        }
+        val merged = rewriteResidualSignatures(mergedClassHeaders, residualTypeMapping)
+        val missingLines = missingEntries.map { "${it.original} -> ${it.obfuscated}:" }
         return appendLines(merged, missingLines)
     }
 

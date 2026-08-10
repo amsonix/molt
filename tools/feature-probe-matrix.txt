@@ -1,7 +1,7 @@
 # Feature probe matrix (orthogonal to agp-compat-matrix.txt)
 # Columns: feature_id  preset  probe  agp  gradle  tier  required
 #
-# probe:  smoke | apk | aab | apk-rename | aab-rename | all | sample | integration
+# probe:  smoke | apk | aab | apk-rename | aab-rename | runtime | all | sample | integration
 # tier:   gate (PR) | nightly | cross-agp (9.3.0 sanity) | weekly
 #
 # Default AGP/Gradle unless row overrides. gate rows run on PR; nightly runs all rows.

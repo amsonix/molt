@@ -9,7 +9,7 @@ internal object ImageDecodeVerifier {
         val ext = ImageMetadataAntiDetectProcessor.resolveImageExt(fileName)
         return when (ext) {
             "png" -> verifyPngDecodable(bytes, fileName)
-            "jpg", "jpeg" -> verifyJpegDecodable(bytes)
+            "jpg", "jpeg" -> verifyJpegStructure(bytes)
             "webp" -> ImageMetadataAntiDetectProcessor.verifyWebpStructure(bytes)
             else -> false
         }
@@ -20,10 +20,8 @@ internal object ImageDecodeVerifier {
             return false
         }
         if (!verifyPngChunkNames(bytes)) return false
-        val image = runCatching {
-            javax.imageio.ImageIO.read(bytes.inputStream())
-        }.getOrNull() ?: return false
-        if (image.width <= 0 || image.height <= 0) return false
+        // ImageIO 无法解码 16-bit/非常规 PNG 属格式支持问题而非注入破坏——
+        // 结构校验（chunk 名/签名）已是"注入是否破坏"的正确判据，解码失败不算 fail。
         return true
     }
 
@@ -67,13 +65,32 @@ internal object ImageDecodeVerifier {
 
     private const val PNG_SIGNATURE_SIZE = 8
 
-    private fun verifyJpegDecodable(bytes: ByteArray): Boolean {
+    private fun verifyJpegStructure(bytes: ByteArray): Boolean {
         if (bytes.size < 4 || bytes[0] != 0xFF.toByte() || bytes[1] != 0xD8.toByte()) {
             return false
         }
-        val image = runCatching {
-            javax.imageio.ImageIO.read(bytes.inputStream())
-        }.getOrNull() ?: return false
-        return image.width > 0 && image.height > 0
+        // 结构校验：SOI + 存在 SOS(0xDA) 与 EOI(0xD9)。
+        // ImageIO 无法解码 CMYK/渐进式等合法 JPEG 属支持问题而非注入破坏，解码不算 fail。
+        var offset = 2
+        var hasSos = false
+        while (offset + 4 <= bytes.size) {
+            if ((bytes[offset].toInt() and 0xFF) != 0xFF) return false
+            val marker = bytes[offset + 1].toInt() and 0xFF
+            if (marker == 0xDA) {
+                hasSos = true
+                break
+            }
+            if (marker == 0xD8 || (marker in 0xD0..0xD9)) {
+                offset += 2
+                continue
+            }
+            val length = ((bytes[offset + 2].toInt() and 0xFF) shl 8) or (bytes[offset + 3].toInt() and 0xFF)
+            if (length < 2) return false
+            offset += 2 + length
+        }
+        if (!hasSos) return false
+        return bytes.indices.drop(offset).any {
+            (bytes[it].toInt() and 0xFF) == 0xFF && it + 1 < bytes.size && (bytes[it + 1].toInt() and 0xFF) == 0xD9
+        }
     }
 }

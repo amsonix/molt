@@ -44,11 +44,8 @@ internal object ImageMetadataAntiDetectProcessor {
             bytes = microCompressRaster(bytes, ext, config.microCompressQuality, random) ?: bytes
         }
         val token = config.metadataToken.ifBlank { "obfuscate-${random.nextInt()}" }
-        if (hasShellMetadata(bytes, input.name)) {
-            output.parentFile?.mkdirs()
-            output.writeBytes(bytes)
-            return true
-        }
+        // 已含 shell metadata 的图同样重新注入（token 每次构建不同 → output != input，
+        // failOnUnchangedImageAntiDetect 不会误报"未变化"）。
         val updated = when (ext) {
             "png" -> injectPngMetadata(bytes, random, token, config.pngExtraChunks)
             in JPEG_EXTENSIONS -> injectJpegMetadata(bytes, token, config.jpegMetadataMode)
@@ -123,12 +120,15 @@ internal object ImageMetadataAntiDetectProcessor {
                         compressionQuality = (base - jitter).coerceIn(0.92f, 0.99f)
                     }
                 }
-                ByteArrayOutputStream().use { buffer ->
+                // 保留原 EXIF（orientation/ICC）：ImageIO 重编码会剥离，照片资源会旋转错误。
+                val originalExif = extractJpegExifApp1(input)
+                val reencoded = ByteArrayOutputStream().use { buffer ->
                     writer.output = javax.imageio.ImageIO.createImageOutputStream(buffer)
                     writer.write(null, javax.imageio.IIOImage(image, null, null), param)
                     writer.dispose()
                     buffer.toByteArray()
                 }
+                originalExif?.let { exif -> insertJpegSegment(reencoded, 0xE1.toByte(), exif) } ?: reencoded
             }
             else -> input
         }
@@ -153,7 +153,6 @@ internal object ImageMetadataAntiDetectProcessor {
         }
         val token = config.metadataToken.ifBlank { "apk-fallback-${random.nextInt()}" }
         val fileName = entryName.substringAfterLast('/')
-        if (hasShellMetadata(working, fileName)) return working
         val updated = when (ext) {
             "png" -> injectPngMetadata(working, random, token, config.pngExtraChunks)
             in JPEG_EXTENSIONS -> injectJpegMetadata(working, token, config.jpegMetadataMode)
@@ -313,12 +312,41 @@ internal object ImageMetadataAntiDetectProcessor {
 
     private fun buildExifApp1Payload(token: String): ByteArray {
         val header = "Exif\u0000\u0000".encodeToByteArray()
+        // 合法空 IFD：TIFF 头(8B) + entry count=0(2B) + next-IFD=0(4B)。
+        // 缺 next-IFD 的畸形 TIFF 会让严格解析器告警。
         val tiff = byteArrayOf(
             0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00,
-            0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         )
         val note = token.encodeToByteArray().copyOf(minOf(48, token.length.coerceAtLeast(1)))
         return header + tiff + note
+    }
+
+    /** 提取首个 APP1（Exif）段 payload；无则 null（避免重编码后照片方向信息丢失）。 */
+    private fun extractJpegExifApp1(input: ByteArray): ByteArray? {
+        var offset = 2
+        while (offset + 4 <= input.size) {
+            if (input[offset].toInt() != 0xFF) return null
+            val marker = input[offset + 1].toInt() and 0xFF
+            if (marker == 0xDA) return null
+            if (marker == 0xD8 || (marker in 0xD0..0xD9)) {
+                offset += 2
+                continue
+            }
+            if (offset + 4 > input.size) return null
+            val length = ((input[offset + 2].toInt() and 0xFF) shl 8) or (input[offset + 3].toInt() and 0xFF)
+            if (marker == 0xE1 && length >= 10) {
+                val payload = input.copyOfRange(offset + 4, offset + 2 + length)
+                if (payload.size >= 6 &&
+                    payload[0] == 'E'.code.toByte() && payload[1] == 'x'.code.toByte() &&
+                    payload[2] == 'i'.code.toByte() && payload[3] == 'f'.code.toByte()
+                ) {
+                    return payload
+                }
+            }
+            offset += 2 + length
+        }
+        return null
     }
 
     private fun insertJpegSegment(input: ByteArray, marker: Byte, payload: ByteArray): ByteArray? {

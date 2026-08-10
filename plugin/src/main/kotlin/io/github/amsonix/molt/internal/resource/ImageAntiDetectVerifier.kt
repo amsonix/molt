@@ -137,7 +137,7 @@ internal object ImageAntiDetectVerifier {
         val undecodable = mutableListOf<String>()
         ZipFile(apkFile).use { zip ->
             zip.entries().asSequence()
-                .filter { !it.isDirectory && isImageEntry(it.name) }
+                .filter { !it.isDirectory && isResImageEntry(it.name) && isImageEntry(it.name) }
                 .forEach { entry ->
                     val bytes = zip.getInputStream(entry).readBytes()
                     val md5 = ImageMetadataAntiDetectProcessor.md5Hex(bytes)

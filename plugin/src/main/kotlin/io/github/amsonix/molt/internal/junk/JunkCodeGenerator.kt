@@ -128,7 +128,7 @@ internal object JunkCodeGenerator {
 
     private fun buildLayoutName(resPrefix: String, packageName: String, activityStem: String): String {
         val prefix = resPrefix.lowercase().trimEnd('_') + "_"
-        val pkgToken = packageName.replace('.', '_')
+        val pkgToken = packageName.replace('.', '_').lowercase()
         return "${prefix}${pkgToken}_activity_$activityStem"
     }
 
