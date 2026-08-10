@@ -11,9 +11,11 @@ import org.jf.dexlib2.immutable.ImmutableMethod
 import org.jf.dexlib2.immutable.ImmutableMethodImplementation
 import org.jf.dexlib2.immutable.instruction.ImmutableInstruction10x
 import org.jf.dexlib2.immutable.instruction.ImmutableInstruction11x
+import org.jf.dexlib2.immutable.instruction.ImmutableInstruction21c
 import org.jf.dexlib2.immutable.instruction.ImmutableInstruction35c
 import org.jf.dexlib2.immutable.instruction.ImmutableInstruction3rc
 import org.jf.dexlib2.immutable.reference.ImmutableMethodReference
+import org.jf.dexlib2.immutable.reference.ImmutableStringReference
 import org.jf.dexlib2.immutable.reference.ImmutableTypeReference
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.jf.dexlib2.writer.pool.DexPool
@@ -22,6 +24,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.File
 
 class AssetsEncryptTest {
 
@@ -333,6 +336,223 @@ class AssetsEncryptTest {
             "Landroid/content/res/AssetManager;",
             ref.definingClass,
         )
+    }
+
+    @Test
+    fun scanFdReferencedPaths_extractsConstStringFileNames() {
+        val owner = "Lcom/example/app/Main;"
+        val call = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "openFd",
+                listOf("Ljava/lang/String;"),
+                "Landroid/content/res/AssetFileDescriptor;",
+            ),
+        )
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("video/intro.mp4"),
+        )
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "readFd",
+                    emptyList(),
+                    "Landroid/content/res/AssetFileDescriptor;",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        2,
+                        listOf(constString, call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        val paths = DexAssetEncryptor.scanFdReferencedPaths(openDex(buildDex(clazz)))
+        assertEquals(setOf("video/intro.mp4"), paths)
+    }
+
+    @Test
+    fun scanFdReferencedPaths_ignoresOpenAndDynamicCallers() {
+        val owner = "Lcom/example/app/Main;"
+        val openCall = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "open",
+                listOf("Ljava/lang/String;"),
+                "Ljava/io/InputStream;",
+            ),
+        )
+        val moveBasedCall = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            2,
+            0,
+            2,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "openFd",
+                listOf("Ljava/lang/String;"),
+                "Landroid/content/res/AssetFileDescriptor;",
+            ),
+        )
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("video/other.mp4"),
+        )
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "mix",
+                    emptyList(),
+                    "Ljava/lang/Object;",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        3,
+                        listOf(
+                            constString,
+                            openCall,
+                            moveBasedCall,
+                            ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0),
+                        ),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        val paths = DexAssetEncryptor.scanFdReferencedPaths(openDex(buildDex(clazz)))
+        assertTrue("open() 调用不得计入，动态寄存器调用不得计入", paths.isEmpty())
+    }
+
+    @Test
+    fun patchZip_fdReferencedFileStaysPlaintext() {
+        val owner = "Lcom/example/app/Main;"
+        val fdCall = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "openFd",
+                listOf("Ljava/lang/String;"),
+                "Landroid/content/res/AssetFileDescriptor;",
+            ),
+        )
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("video.mp4"),
+        )
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "readFd",
+                    emptyList(),
+                    "Landroid/content/res/AssetFileDescriptor;",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        2,
+                        listOf(constString, fdCall, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        val dexBytes = buildDex(clazz)
+        val zip = File.createTempFile("molt-assets-test", ".apk")
+        try {
+            java.util.zip.ZipOutputStream(zip.outputStream().buffered()).use { zout ->
+                zout.putNextEntry(java.util.zip.ZipEntry("classes.dex"))
+                zout.write(dexBytes)
+                zout.closeEntry()
+                zout.putNextEntry(java.util.zip.ZipEntry("assets/video.mp4"))
+                zout.write("MP4PLAINTEXT".encodeToByteArray())
+                zout.closeEntry()
+                zout.putNextEntry(java.util.zip.ZipEntry("assets/config.json"))
+                zout.write("""{"api": "https://example.com"}""".encodeToByteArray())
+                zout.closeEntry()
+            }
+            val configWithVideo = config.copy(filePatterns = listOf("*.json", "*.mp4"))
+            val result = ZipAssetEncryptor.patchZipInPlace(zip, configWithVideo, "assets/")
+            assertEquals(1, result.encrypted)
+            assertEquals(1, result.fdExcluded)
+
+            java.util.zip.ZipFile(zip).use { zf ->
+                val video = zf.getInputStream(zf.getEntry("assets/video.mp4")).use { it.readBytes() }
+                assertTrue(
+                    "openFd 引用的文件必须保持明文",
+                    String(video, Charsets.UTF_8).contains("MP4PLAINTEXT"),
+                )
+                val cfg = zf.getInputStream(zf.getEntry("assets/config.json")).use { it.readBytes() }
+                assertFalse(
+                    "清单内普通文件必须加密",
+                    String(cfg, Charsets.UTF_8).contains("https://example.com"),
+                )
+            }
+        } finally {
+            zip.delete()
+        }
     }
 
     private fun buildDex(vararg classes: org.jf.dexlib2.iface.ClassDef): ByteArray {

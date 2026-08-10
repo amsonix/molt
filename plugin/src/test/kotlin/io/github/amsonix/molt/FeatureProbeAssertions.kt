@@ -243,6 +243,11 @@ object FeatureProbeAssertions {
                 "assets/secret.cfg must be encrypted",
                 String(secret, Charsets.UTF_8).contains("token=abc123"),
             )
+            val intro = zf.getInputStream(zf.getEntry("assets/intro.mp4")).use { it.readBytes() }
+            assertTrue(
+                "openFd-referenced media must stay plaintext (autoExcludeFdFiles)",
+                String(intro, Charsets.UTF_8).contains("MP4PLAINTEXT-OPENFD"),
+            )
             val dexBytes = java.io.ByteArrayOutputStream().apply {
                 zf.entries().asSequence()
                     .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
@@ -281,6 +286,7 @@ object FeatureProbeAssertions {
                     java.io.BufferedInputStream(java.io.ByteArrayInputStream(bytes)),
                 )
                 for (clazz in dexFile.classes) {
+                    if (clazz.type == fogDescriptor) continue
                     for (method in clazz.virtualMethods + clazz.directMethods) {
                         val impl = method.implementation ?: continue
                         for (ins in impl.instructions) {
