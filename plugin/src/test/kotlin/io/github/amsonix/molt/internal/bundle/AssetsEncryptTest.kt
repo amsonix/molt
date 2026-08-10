@@ -12,6 +12,7 @@ import org.jf.dexlib2.immutable.ImmutableMethodImplementation
 import org.jf.dexlib2.immutable.instruction.ImmutableInstruction10x
 import org.jf.dexlib2.immutable.instruction.ImmutableInstruction11x
 import org.jf.dexlib2.immutable.instruction.ImmutableInstruction35c
+import org.jf.dexlib2.immutable.instruction.ImmutableInstruction3rc
 import org.jf.dexlib2.immutable.reference.ImmutableMethodReference
 import org.jf.dexlib2.immutable.reference.ImmutableTypeReference
 import org.jf.dexlib2.writer.io.MemoryDataStore
@@ -154,6 +155,122 @@ class AssetsEncryptTest {
         val instruction = method.implementation!!.instructions.first()
         val ref = (instruction as ReferenceInstruction).reference as MethodReference
         assertEquals("must call FogAssets.open", "Lcom/example/app/shell/fogassets/FogAssets;", ref.definingClass)
+    }
+
+    @Test
+    fun twoArgOpen_callIsRewrittenToFogAssetsTwoArgOverload() {
+        val owner = "Lcom/example/app/Main;"
+        val call = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            3,
+            0,
+            1,
+            2,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "open",
+                listOf("Ljava/lang/String;", "I"),
+                "Ljava/io/InputStream;",
+            ),
+        )
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "read",
+                    emptyList(),
+                    "Ljava/io/InputStream;",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        3,
+                        listOf(call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        val input = buildDex(clazz)
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
+        val rebuilt = buildDex(output)
+        val parsed = openDex(rebuilt)
+
+        val method = parsed.classes.first().directMethods.first()
+        val instruction = method.implementation!!.instructions.first() as ReferenceInstruction
+        val ref = instruction.reference as MethodReference
+        assertEquals("must call FogAssets.open", "Lcom/example/app/shell/fogassets/FogAssets;", ref.definingClass)
+        assertEquals("must be 2-arg overload", listOf("Ljava/lang/String;", "I"), ref.parameterTypes)
+        val opcode = method.implementation!!.instructions.first().opcode
+        assertTrue("must be invoke-static", opcode == Opcode.INVOKE_STATIC)
+    }
+
+    @Test
+    fun twoArgOpen_rangeForm_isRewritten() {
+        val owner = "Lcom/example/app/Main;"
+        val call = ImmutableInstruction3rc(
+            Opcode.INVOKE_VIRTUAL_RANGE,
+            20,
+            3,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "open",
+                listOf("Ljava/lang/String;", "I"),
+                "Ljava/io/InputStream;",
+            ),
+        )
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "read",
+                    emptyList(),
+                    "Ljava/io/InputStream;",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        24,
+                        listOf(call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        val input = buildDex(clazz)
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
+        val rebuilt = buildDex(output)
+        val parsed = openDex(rebuilt)
+
+        val method = parsed.classes.first().directMethods.first()
+        val instruction = method.implementation!!.instructions.first() as ReferenceInstruction
+        val ref = instruction.reference as MethodReference
+        assertEquals("must call FogAssets.open", "Lcom/example/app/shell/fogassets/FogAssets;", ref.definingClass)
+        assertEquals("must be 2-arg overload", listOf("Ljava/lang/String;", "I"), ref.parameterTypes)
+        val opcode = method.implementation!!.instructions.first().opcode
+        assertTrue("must be invoke-static/range", opcode == Opcode.INVOKE_STATIC_RANGE)
     }
 
     private fun buildDex(vararg classes: org.jf.dexlib2.iface.ClassDef): ByteArray {
