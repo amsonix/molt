@@ -372,6 +372,7 @@ internal object MoltObfuscateVariantWiring {
                 dexPerturbIntensity.set(extension.dexPerturb.intensity)
                 assetsEncryptEnabled.set(variantSettings.assetsEncryptEnabled)
                 assetsEncryptFilePatterns.set(extension.assetsEncrypt.filePatterns)
+                assetsEncryptAutoExcludeFdFiles.set(extension.assetsEncrypt.autoExcludeFdFiles)
                 fogAssetsDescriptor.set(
                     io.github.amsonix.molt.internal.bundle.FogAssetsSource
                         .fogAssetsDescriptor(variant.applicationId.get()),
@@ -457,6 +458,7 @@ internal object MoltObfuscateVariantWiring {
                 dexPerturbIntensity.set(extension.dexPerturb.intensity)
                 assetsEncryptEnabled.set(variantSettings.assetsEncryptEnabled)
                 assetsEncryptFilePatterns.set(extension.assetsEncrypt.filePatterns)
+                assetsEncryptAutoExcludeFdFiles.set(extension.assetsEncrypt.autoExcludeFdFiles)
                 fogAssetsDescriptor.set(
                     io.github.amsonix.molt.internal.bundle.FogAssetsSource
                         .fogAssetsDescriptor(variant.applicationId.get()),

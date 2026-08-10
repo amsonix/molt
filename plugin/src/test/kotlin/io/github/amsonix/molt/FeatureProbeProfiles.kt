@@ -213,6 +213,12 @@ object FeatureProbeProfiles {
             "app/src/main/assets/secret.cfg",
             "token=abc123\nurl=https://example.com/{id}\n",
         )
+        // 媒体文件：在清单内（*.mp4）但被 openFd 消费 → 自动排除，保持明文。
+        AgpTestFixture.write(
+            root,
+            "app/src/main/assets/intro.mp4",
+            "MP4PLAINTEXT-OPENFD",
+        )
         AgpTestFixture.write(
             root,
             "app/src/main/java/fixture/app/MainActivity.java",
@@ -227,6 +233,10 @@ object FeatureProbeProfiles {
                     return getAssets().open("secret.cfg", 0);
                 }
 
+                public android.content.res.AssetFileDescriptor readFd() throws java.io.IOException {
+                    return getAssets().openFd("intro.mp4");
+                }
+
                 @Override
                 protected void onCreate(android.os.Bundle savedInstanceState) {
                     super.onCreate(savedInstanceState);
@@ -234,9 +244,30 @@ object FeatureProbeProfiles {
                         String a = new String(streamBytes(read()), "UTF-8");
                         String b = new String(streamBytes(read2()), "UTF-8");
                         android.util.Log.i("MoltProbe", "molt fog probe marker 1arg=" + a.trim() + " 2arg=" + b.trim());
+                        android.content.res.AssetFileDescriptor afd = readFd();
+                        String c = new String(fdBytes(afd), "UTF-8");
+                        afd.close();
+                        android.util.Log.i("MoltProbe", "molt fog probe marker fd=" + c.trim());
                     } catch (Exception e) {
                         android.util.Log.e("MoltProbe", "fog probe exception", e);
                         throw new RuntimeException("fog probe failed", e);
+                    }
+                }
+
+                private static byte[] fdBytes(android.content.res.AssetFileDescriptor afd) throws java.io.IOException {
+                    java.io.FileInputStream fis = new java.io.FileInputStream(afd.getFileDescriptor());
+                    try {
+                        fis.skip(afd.getStartOffset());
+                        byte[] buf = new byte[(int) afd.getLength()];
+                        int off = 0;
+                        while (off < buf.length) {
+                            int n = fis.read(buf, off, buf.length - off);
+                            if (n < 0) break;
+                            off += n;
+                        }
+                        return buf;
+                    } finally {
+                        fis.close();
                     }
                 }
 
@@ -257,7 +288,7 @@ object FeatureProbeProfiles {
             """
             stringEncrypt.enabled.set(false)
             assetsEncrypt.enabled.set(true)
-            assetsEncrypt.filePatterns.set(['*.cfg'])
+            assetsEncrypt.filePatterns.set(['*.cfg', '*.mp4'])
             bundleResourceObfuscate.enabled.set(true)
             bundleResourceObfuscate.obfuscateApk.set(true)
             allowUnsignedOutput.set(true)

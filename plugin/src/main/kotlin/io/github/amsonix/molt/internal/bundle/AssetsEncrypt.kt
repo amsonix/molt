@@ -22,11 +22,15 @@ import java.io.File
  * [filePatterns]：声明清单（文件名 glob）；命中的 assets 文件在 transform 阶段加密，
  * DEX 中 `AssetManager.open(String)` 调用点改写为 `FogAssets.open(String)`（运行时解密）。
  * WebView / SDK 自读文件、openFd 调用不适用——不要加入清单。
+ *
+ * [autoExcludeFdFiles]：构建期扫描 DEX 中 `openFd(String)`/`openNonAssetFd(String)`
+ * 的常量文件名，命中清单的文件自动跳过加密（fd 读取路径在 Java 外，加密必失败）。
  */
 internal data class AssetsEncryptConfig(
     val seed: Int,
     val filePatterns: List<String>,
     val fogAssetsDescriptor: String,
+    val autoExcludeFdFiles: Boolean = true,
 )
 
 /** FogAssets 解密 + ContentProvider 初始化源码生成（与 Fog 同密钥体系）。 */
@@ -137,6 +141,46 @@ internal object DexAssetEncryptor {
     private val OPEN_1ARG_SIGNATURE = listOf("Ljava/lang/String;")
     private val OPEN_2ARG_SIGNATURE = listOf("Ljava/lang/String;", "I")
     private val RETURN_TYPE = "Ljava/io/InputStream;"
+    private val FD_RETURN_TYPE = "Landroid/content/res/AssetFileDescriptor;"
+    private val FD_METHODS = setOf("openFd", "openNonAssetFd")
+
+    /** 扫描 DEX 中 `openFd(String)`/`openNonAssetFd(String)` 的常量文件名参数。 */
+    fun scanFdReferencedPaths(dexFile: DexBackedDexFile): Set<String> {
+        val paths = mutableSetOf<String>()
+        for (classDef in dexFile.classes) {
+            for (method in classDef.directMethods + classDef.virtualMethods) {
+                val instructions = method.implementation?.instructions?.toList() ?: continue
+                for (index in instructions.indices) {
+                    val instruction = instructions[index]
+                    val pathRegister = fdCallPathRegister(instruction) ?: continue
+                    val previous = if (index > 0) instructions[index - 1] else null
+                    if (previous !is org.jf.dexlib2.iface.instruction.OneRegisterInstruction) continue
+                    if (previous !is org.jf.dexlib2.iface.instruction.ReferenceInstruction) continue
+                    val stringRef = previous.reference as? org.jf.dexlib2.iface.reference.StringReference ?: continue
+                    if (previous.registerA != pathRegister) continue
+                    paths.add(stringRef.string)
+                }
+            }
+        }
+        return paths
+    }
+
+    private fun fdCallPathRegister(instruction: Instruction): Int? {
+        if (instruction !is ReferenceInstruction) return null
+        val reference = instruction.reference as? MethodReference ?: return null
+        if (reference.definingClass != ASSET_MANAGER ||
+            reference.name !in FD_METHODS ||
+            reference.parameterTypes != OPEN_1ARG_SIGNATURE ||
+            reference.returnType != FD_RETURN_TYPE
+        ) {
+            return null
+        }
+        return when (instruction) {
+            is org.jf.dexlib2.iface.instruction.FiveRegisterInstruction -> instruction.registerD
+            is org.jf.dexlib2.iface.instruction.RegisterRangeInstruction -> instruction.startRegister + 1
+            else -> null
+        }
+    }
 
     fun containsAssetsEncryptableClass(dexFile: DexBackedDexFile, config: AssetsEncryptConfig): Boolean {
         for (classDef in dexFile.classes) {
@@ -269,12 +313,21 @@ internal object ZipAssetEncryptor {
 
     private val WEBVIEW_ASSET_REFERENCE = Regex("""file:///android_asset/[^"'\s)]+""")
 
-    fun patchZipInPlace(zipFile: File, config: AssetsEncryptConfig, assetsPrefix: String) {
-        if (config.filePatterns.isEmpty()) return
+    /** patch 结果统计：加密文件数、因 openFd 引用被跳过的文件数。 */
+    data class Result(val encrypted: Int, val fdExcluded: Int)
+
+    fun patchZipInPlace(zipFile: File, config: AssetsEncryptConfig, assetsPrefix: String): Result {
+        if (config.filePatterns.isEmpty()) return Result(0, 0)
         val temp = File.createTempFile("molt-assets-encrypt", ".zip", zipFile.parentFile)
         var encrypted = 0
+        var fdExcluded = 0
         try {
             java.util.zip.ZipFile(zipFile).use { zipIn ->
+                val fdReferenced = if (config.autoExcludeFdFiles) {
+                    scanFdReferencedAssets(zipIn, config, assetsPrefix)
+                } else {
+                    emptySet()
+                }
                 java.util.zip.ZipOutputStream(temp.outputStream().buffered()).use { zipOut ->
                     zipIn.entries().asSequence().forEach { entry ->
                         if (entry.isDirectory) {
@@ -283,11 +336,19 @@ internal object ZipAssetEncryptor {
                             )
                             return@forEach
                         }
-                        if (entry.name.startsWith(assetsPrefix) && matches(entry.name, config.filePatterns)) {
+                        val inAssets = entry.name.startsWith(assetsPrefix)
+                        val relativePath = if (inAssets) entry.name.removePrefix(assetsPrefix) else entry.name
+                        if (inAssets && relativePath in fdReferenced) {
+                            fdExcluded++
+                            io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
+                                zipOut, zipIn, entry, entry.name,
+                            )
+                            return@forEach
+                        }
+                        if (inAssets && matches(entry.name, config.filePatterns)) {
                             val bytes = zipIn.getInputStream(entry).use { it.readBytes() }
                             warnOnWebViewReferences(zipFile, entry.name, bytes)
                             // 密钥按相对 assets 的路径派生（与运行时 FogAssets.open(path) 一致）。
-                            val relativePath = entry.name.removePrefix(assetsPrefix)
                             val encryptedBytes = encryptBytes(relativePath, bytes, config.seed)
                             io.github.amsonix.molt.internal.bundle.ZipEntryWriter.writeBytes(
                                 zipOut = zipOut,
@@ -305,14 +366,42 @@ internal object ZipAssetEncryptor {
                     }
                 }
             }
-            if (encrypted > 0) {
+            if (encrypted > 0 || fdExcluded > 0) {
                 temp.copyTo(zipFile, overwrite = true)
             }
         } finally {
             temp.delete()
         }
-        java.util.logging.Logger.getLogger(ZipAssetEncryptor::class.java.name)
-            .info("molt: assets encrypted=$encrypted")
+        val logger = java.util.logging.Logger.getLogger(ZipAssetEncryptor::class.java.name)
+        logger.info("molt: assets encrypted=$encrypted fdExcluded=$fdExcluded")
+        if (fdExcluded > 0) {
+            logger.warning(
+                "molt: ${fdExcluded} asset(s) referenced by AssetManager.openFd/openNonAssetFd " +
+                    "were kept plaintext (fd reads bypass the FogAssets rewrite)",
+            )
+        }
+        return Result(encrypted, fdExcluded)
+    }
+
+    private fun scanFdReferencedAssets(
+        zipIn: java.util.zip.ZipFile,
+        config: AssetsEncryptConfig,
+        assetsPrefix: String,
+    ): Set<String> {
+        val patterns = config.filePatterns
+        val referenced = mutableSetOf<String>()
+        zipIn.entries().asSequence()
+            .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
+            .forEach { entry ->
+                val dexFile = org.jf.dexlib2.dexbacked.DexBackedDexFile.fromInputStream(
+                    null,
+                    java.io.BufferedInputStream(zipIn.getInputStream(entry)),
+                )
+                for (path in DexAssetEncryptor.scanFdReferencedPaths(dexFile)) {
+                    if (matches(assetsPrefix + path, patterns)) referenced.add(path)
+                }
+            }
+        return referenced
     }
 
     fun encryptBytes(path: String, bytes: ByteArray, seed: Int): ByteArray {

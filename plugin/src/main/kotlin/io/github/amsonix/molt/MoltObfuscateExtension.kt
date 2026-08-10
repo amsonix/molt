@@ -383,6 +383,12 @@ abstract class AssetsEncryptExtension @Inject constructor(
 
     /** 声明清单（文件名 glob，如 `*.json`）；命中的 assets 文件加密并走 FogAssets 解密。 */
     val filePatterns: ListProperty<String> = project.objects.listProperty(String::class.java)
+
+    /**
+     * 构建期扫描 DEX 中 `openFd(String)`/`openNonAssetFd(String)` 的常量文件名，
+     * 命中清单的文件自动跳过加密（fd 读取路径在 Java 外，加密必失败）。默认 true。
+     */
+    val autoExcludeFdFiles: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
 }
 
 abstract class AssetsEncryptVariantOverrideExtension @Inject constructor(

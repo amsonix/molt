@@ -201,6 +201,9 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
     abstract val fogAssetsDescriptor: Property<String>
 
     @get:Input
+    abstract val assetsEncryptAutoExcludeFdFiles: Property<Boolean>
+
+    @get:Input
     abstract val assetsProtectEnabled: Property<Boolean>
 
     @get:Input
@@ -354,6 +357,7 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
             seed = seedValue,
             filePatterns = assetsEncryptFilePatterns.get(),
             fogAssetsDescriptor = fogAssetsDescriptor.get(),
+            autoExcludeFdFiles = assetsEncryptAutoExcludeFdFiles.get(),
         )
     }
 
@@ -559,6 +563,9 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
     abstract val fogAssetsDescriptor: Property<String>
 
     @get:Input
+    abstract val assetsEncryptAutoExcludeFdFiles: Property<Boolean>
+
+    @get:Input
     abstract val assetsProtectEnabled: Property<Boolean>
 
     @get:Input
@@ -754,6 +761,7 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
             seed = seedValue,
             filePatterns = assetsEncryptFilePatterns.get(),
             fogAssetsDescriptor = fogAssetsDescriptor.get(),
+            autoExcludeFdFiles = assetsEncryptAutoExcludeFdFiles.get(),
         )
     }
 
