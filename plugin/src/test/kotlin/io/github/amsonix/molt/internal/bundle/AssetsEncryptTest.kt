@@ -634,7 +634,8 @@ class AssetsEncryptTest {
             val configWithVideo = config.copy(filePatterns = listOf("*.json", "*.mp4", "*.bin"))
             val result = ZipAssetEncryptor.patchZipInPlace(zip, configWithVideo, "assets/")
             assertEquals(1, result.encrypted)
-            assertEquals(1, result.fdExcluded)
+            assertEquals(0, result.fdExcluded)
+            assertEquals(1, result.mediaSkipped)
             assertEquals(1, result.noCallSite)
 
             java.util.zip.ZipFile(zip).use { zf ->
@@ -722,6 +723,84 @@ class AssetsEncryptTest {
             setOf("secret.cfg"),
             paths,
         )
+    }
+
+    @Test
+    fun patchZip_mediaExtensionStaysPlaintextEvenWithOpenCall() {
+        val owner = "Lcom/example/app/Main;"
+        val openCall = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Landroid/content/res/AssetManager;",
+                "open",
+                listOf("Ljava/lang/String;"),
+                "Ljava/io/InputStream;",
+            ),
+        )
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("audio.mp3"),
+        )
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "read",
+                    emptyList(),
+                    "Ljava/io/InputStream;",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        2,
+                        listOf(constString, openCall, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        val dexBytes = buildDex(clazz)
+        val zip = File.createTempFile("molt-assets-test", ".apk")
+        try {
+            java.util.zip.ZipOutputStream(zip.outputStream().buffered()).use { zout ->
+                zout.putNextEntry(java.util.zip.ZipEntry("classes.dex"))
+                zout.write(dexBytes)
+                zout.closeEntry()
+                zout.putNextEntry(java.util.zip.ZipEntry("assets/audio.mp3"))
+                zout.write("AUDIOPLAINTEXT".encodeToByteArray())
+                zout.closeEntry()
+            }
+            val result = ZipAssetEncryptor.patchZipInPlace(zip, config.copy(filePatterns = listOf("*.mp3")), "assets/")
+            assertEquals(0, result.encrypted)
+            assertEquals(1, result.mediaSkipped)
+
+            java.util.zip.ZipFile(zip).use { zf ->
+                val audio = zf.getInputStream(zf.getEntry("assets/audio.mp3")).use { it.readBytes() }
+                assertTrue(
+                    "媒体扩展名即使有 open() 调用点也必须保持明文（AAPT no-compress 意图层）",
+                    String(audio, Charsets.UTF_8).contains("AUDIOPLAINTEXT"),
+                )
+            }
+        } finally {
+            zip.delete()
+        }
     }
 
     private fun buildDex(vararg classes: org.jf.dexlib2.iface.ClassDef): ByteArray {

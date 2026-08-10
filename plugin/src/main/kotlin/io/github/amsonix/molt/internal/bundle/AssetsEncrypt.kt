@@ -337,14 +337,30 @@ internal object ZipAssetEncryptor {
 
     private val WEBVIEW_ASSET_REFERENCE = Regex("""file:///android_asset/[^"'\s)]+""")
 
-    /** patch 结果统计：加密数、openFd 引用排除数、清单内无常量 open 调用点跳过数。 */
-    data class Result(val encrypted: Int, val fdExcluded: Int, val noCallSite: Int)
+    /**
+     * AAPT2 硬编码默认 no-compress 扩展名（cmd/Link.cpp，android-9.0.0_r1 起各版本一致）。
+     * 媒体文件不压缩 = openFd/mmap 友好——加密它们必然破坏播放/映射场景（要播必须可解码），
+     * 作为"意图层"硬排除：清单命中的媒体文件不加密，即使存在 open() 调用点。
+     */
+    private val AAPT2_NO_COMPRESS_EXTENSIONS = setOf(
+        ".jpg", ".jpeg", ".png", ".gif", ".wav", ".mp2", ".mp3", ".ogg",
+        ".aac", ".mpg", ".mpeg", ".mid", ".midi", ".smf", ".jet", ".rtttl",
+        ".imy", ".xmf", ".mp4", ".m4a", ".m4v", ".3gp", ".3gpp", ".3g2",
+        ".3gpp2", ".amr", ".awb", ".wma", ".wmv", ".webm", ".mkv",
+    )
+
+    private fun isAaptNoCompressAsset(path: String): Boolean =
+        AAPT2_NO_COMPRESS_EXTENSIONS.any { path.endsWith(it, ignoreCase = true) }
+
+    /** patch 结果统计：加密数、openFd 引用排除数、媒体扩展名排除数、清单内无常量 open 调用点跳过数。 */
+    data class Result(val encrypted: Int, val fdExcluded: Int, val mediaSkipped: Int, val noCallSite: Int)
 
     fun patchZipInPlace(zipFile: File, config: AssetsEncryptConfig, assetsPrefix: String): Result {
-        if (config.filePatterns.isEmpty()) return Result(0, 0, 0)
+        if (config.filePatterns.isEmpty()) return Result(0, 0, 0, 0)
         val temp = File.createTempFile("molt-assets-encrypt", ".zip", zipFile.parentFile)
         var encrypted = 0
         var fdExcluded = 0
+        var mediaSkipped = 0
         var noCallSite = 0
         try {
             java.util.zip.ZipFile(zipFile).use { zipIn ->
@@ -369,6 +385,13 @@ internal object ZipAssetEncryptor {
                         val inAssets = entry.name.startsWith(assetsPrefix)
                         val relativePath = if (inAssets) entry.name.removePrefix(assetsPrefix) else entry.name
                         when {
+                            inAssets && matches(entry.name, config.filePatterns) && isAaptNoCompressAsset(relativePath) -> {
+                                // 意图层：AAPT 媒体扩展名 = openFd/mmap 友好文件，加密必破坏场景。
+                                mediaSkipped++
+                                io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
+                                    zipOut, zipIn, entry, entry.name,
+                                )
+                            }
                             inAssets && relativePath in fdReferenced && matches(entry.name, config.filePatterns) -> {
                                 fdExcluded++
                                 io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
@@ -405,14 +428,20 @@ internal object ZipAssetEncryptor {
                     }
                 }
             }
-            if (encrypted > 0 || fdExcluded > 0) {
+            if (encrypted > 0 || fdExcluded > 0 || mediaSkipped > 0) {
                 temp.copyTo(zipFile, overwrite = true)
             }
         } finally {
             temp.delete()
         }
         val logger = java.util.logging.Logger.getLogger(ZipAssetEncryptor::class.java.name)
-        logger.info("molt: assets encrypted=$encrypted fdExcluded=$fdExcluded noCallSite=$noCallSite")
+        logger.info("molt: assets encrypted=$encrypted fdExcluded=$fdExcluded mediaSkipped=$mediaSkipped noCallSite=$noCallSite")
+        if (mediaSkipped > 0) {
+            logger.warning(
+                "molt: ${mediaSkipped} manifest asset(s) are AAPT no-compress media extensions " +
+                    "(jpg/png/mp4/mp3/...) and were kept plaintext — media must stay decodable",
+            )
+        }
         if (fdExcluded > 0) {
             logger.warning(
                 "molt: ${fdExcluded} asset(s) referenced by AssetManager.openFd/openNonAssetFd " +
@@ -425,7 +454,7 @@ internal object ZipAssetEncryptor {
                     "kept plaintext (dynamic-path / reflection reads cannot be decrypted)",
             )
         }
-        return Result(encrypted, fdExcluded, noCallSite)
+        return Result(encrypted, fdExcluded, mediaSkipped, noCallSite)
     }
 
     private fun scanReferencedAssets(
