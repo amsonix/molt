@@ -28,7 +28,7 @@ internal object MoltObfuscateBaselineProfileSync {
     }
 
     fun maybeSync(
-        logger: JdkLogger,
+        logInfo: (String) -> Unit,
         zipFile: File,
         syncEnabled: Boolean,
         postR8Ran: Boolean,
@@ -37,8 +37,8 @@ internal object MoltObfuscateBaselineProfileSync {
         failOnSyncFailure: Boolean,
     ) {
         maybeSyncInternal(
-            logLifecycle = logger::info,
-            logInfo = logger::info,
+            logLifecycle = logInfo,
+            logInfo = logInfo,
             zipFile = zipFile,
             syncEnabled = syncEnabled,
             postR8Ran = postR8Ran,

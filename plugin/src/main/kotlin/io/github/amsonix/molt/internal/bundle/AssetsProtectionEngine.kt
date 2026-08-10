@@ -16,6 +16,8 @@ internal data class AssetsProtectionConfig(
     val excludePatterns: List<String>,
     /** APK 为 `assets/`，AAB 为 `base/assets/`。 */
     val assetsPrefix: String,
+    /** 构建期信息回调（Gradle logger；java.util.logging 在 Gradle 不可见）。 */
+    val onInfo: (String) -> Unit = {},
 )
 
 internal object AssetsProtectionEngine {
@@ -83,8 +85,7 @@ internal object AssetsProtectionEngine {
                     zipOut.closeEntry()
                     injected++
                 }
-                java.util.logging.Logger.getLogger(AssetsProtectionEngine::class.java.name)
-                    .info("molt: assets protection patched=$patched injected=$injected")
+                config.onInfo("molt: assets protection patched=$patched injected=$injected")
             }
         }
     }
