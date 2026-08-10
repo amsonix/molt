@@ -59,6 +59,39 @@ class AssetsProtectionEngineTest {
     }
 
     @Test
+    fun patch_jsonInjection_survivesBraceInsideStringValuesAndNestedEmptyObjects() {
+        val cases = listOf(
+            """{"url": "https://example.com/{id}", "key": "v"}""",
+            """{"a": "x}y", "b": 1}""",
+            """{"nested": {}}""",
+            """{}""",
+        )
+        cases.forEach { json ->
+            val zip = buildZip("assets/case.json" to json.encodeToByteArray())
+            AssetsProtectionEngine.patchZipInPlace(zip, config)
+            ZipFile(zip).use { zf ->
+                val out = zf.getInputStream(zf.getEntry("assets/case.json"))
+                    .use { it.readBytes().decodeToString() }
+                assertTrue("must gain a junk field: $json -> $out", out.contains("molt_"))
+                // 合法性粗校验：花括号配对 + 非空对象时保持结构
+                assertEquals(
+                    "brace balance must be preserved: $json -> $out",
+                    json.count { it == '{' },
+                    out.count { it == '{' },
+                )
+                assertEquals(
+                    "brace balance must be preserved: $json -> $out",
+                    json.count { it == '}' },
+                    out.count { it == '}' },
+                )
+                assertTrue("injected json must start with object: $out", out.trim().startsWith("{"))
+                assertTrue("injected json must end with object: $out", out.trim().endsWith("}"))
+            }
+            zip.delete()
+        }
+    }
+
+    @Test
     fun patch_seedChangesJunkNames_identicalSeedStaysStable() {
         val zipA = buildZip("assets/a.json" to """{"k": 1}""".encodeToByteArray())
         val zipB = buildZip("assets/a.json" to """{"k": 1}""".encodeToByteArray())

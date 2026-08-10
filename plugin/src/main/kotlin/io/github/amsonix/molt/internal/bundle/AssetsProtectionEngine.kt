@@ -50,30 +50,29 @@ internal object AssetsProtectionEngine {
                         ZipEntryWriter.copy(zipOut, zipIn, entry, entry.name)
                         return@forEach
                     }
-                    val bytes = zipIn.getInputStream(entry).use { it.readBytes() }
-                    if (entry.name.startsWith(config.assetsPrefix) &&
-                        !entry.name.startsWith(junkEntryPrefix)
-                    ) {
-                        val patchedBytes = patchAssetEntry(entry.name, bytes, config, random)
-                        if (patchedBytes != null) {
-                            ZipEntryWriter.writeBytes(
-                                zipOut = zipOut,
-                                source = entry,
-                                outputName = entry.name,
-                                bytes = patchedBytes,
-                                contentsChanged = true,
-                            )
-                            patched++
-                            return@forEach
-                        }
+                    val candidate = entry.name.startsWith(config.assetsPrefix) &&
+                        !entry.name.startsWith(junkEntryPrefix) &&
+                        !matchesAny(entry.name, config.excludePatterns) &&
+                        matchesAny(entry.name, config.filePatterns)
+                    if (!candidate) {
+                        // 未命中扰动清单：保留原始压缩流（不重压缩）。
+                        ZipEntryWriter.copy(zipOut, zipIn, entry, entry.name)
+                        return@forEach
                     }
-                    ZipEntryWriter.writeBytes(
-                        zipOut = zipOut,
-                        source = entry,
-                        outputName = entry.name,
-                        bytes = bytes,
-                        contentsChanged = false,
-                    )
+                    val bytes = zipIn.getInputStream(entry).use { it.readBytes() }
+                    val patchedBytes = patchAssetEntry(entry.name, bytes, config, random)
+                    if (patchedBytes != null) {
+                        ZipEntryWriter.writeBytes(
+                            zipOut = zipOut,
+                            source = entry,
+                            outputName = entry.name,
+                            bytes = patchedBytes,
+                            contentsChanged = true,
+                        )
+                        patched++
+                    } else {
+                        ZipEntryWriter.copy(zipOut, zipIn, entry, entry.name)
+                    }
                 }
                 // 追加假文件（排序插入，保持 zip 确定性）。
                 junkFiles.sortedBy { it.first }.forEach { (name, content) ->
@@ -109,16 +108,44 @@ internal object AssetsProtectionEngine {
         }
     }
 
-    /** JSON 顶层对象：在最后一个 `}` 前注入假字段（不解析，仅结构校验）。 */
+    /** JSON 顶层对象：在对象闭合前注入假字段（不解析；引号状态机定位闭合，避免字符串值内的 `}` 干扰）。 */
     private fun injectJsonField(text: String, random: java.util.Random): String? {
-        val lastBrace = text.lastIndexOf('}')
+        val lastBrace = findObjectClosingBrace(text) ?: return null
         if (lastBrace <= 0) return null
         val head = text.substring(0, lastBrace).trimEnd()
         if (head.isEmpty() || head.endsWith(':')) return null
         val field = "molt_${randomFieldName(random)}"
         val value = randomFieldValue(random)
-        val separator = if (head.endsWith('{')) "" else ","
-        return text.substring(0, lastBrace) + separator + "\"$field\": \"$value\"" + text.substring(lastBrace)
+        if (head.endsWith('{')) {
+            // 空对象（顶层 `{}` 或嵌套空对象作值）：字段注入到顶层 `{` 后，避免 `{,"molt"` 非法。
+            val openBrace = text.indexOf('{')
+            if (openBrace < 0) return null
+            return text.substring(0, openBrace + 1) +
+                "\"$field\": \"$value\", " + text.substring(openBrace + 1)
+        }
+        return text.substring(0, lastBrace) + ",\"$field\": \"$value\"" + text.substring(lastBrace)
+    }
+
+    /** 从后往前找"不在字符串值内"的 `}`（对象闭合），处理 `\"` 转义。 */
+    private fun findObjectClosingBrace(text: String): Int? {
+        var inString = false
+        var escaped = false
+        for (i in text.indices.reversed()) {
+            val c = text[i]
+            if (inString) {
+                when {
+                    escaped -> escaped = false
+                    c == '\\' -> escaped = true
+                    c == '"' -> inString = false
+                }
+                continue
+            }
+            when (c) {
+                '"' -> inString = true
+                '}' -> return i
+            }
+        }
+        return null
     }
 
     private fun isJsonObject(text: String): Boolean = JSON_OBJECT.matches(text)

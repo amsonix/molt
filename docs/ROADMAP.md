@@ -11,6 +11,7 @@ Discussed directions not yet scheduled, ordered by value.
 | DEX control-flow perturbation (basic-block reorder / junk instructions / reflection wrapping) | Reverse-engineering resistance / differentiation | 2-3 days | unscheduled |
 | Assets protection hardening (featureless naming for junk fields/files, drop fixed prefixes) | Differentiation (survive whitelist filtering) | 30 min | unscheduled |
 | Extend default assets coverage to `*.html` / `*.js` | Resource anti-extraction | 30 min | unscheduled |
+| Image anti-detect transform verify gap (fallback injection not recorded in report; only decodability checked) | Verification closure | half day | unscheduled |
 
 ## Low priority (on record)
 
