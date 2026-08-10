@@ -34,7 +34,7 @@ class AssetsProtectionEngineTest {
 
         ZipFile(zip).use { zf ->
             val json = zf.getInputStream(zf.getEntry("assets/config.json")).use { it.readBytes() }.decodeToString()
-            assertTrue("json must gain a junk field", json.contains("\"molt_"))
+            assertTrue("json must be perturbed (featureless junk field)", json != """{"key": "value"}""")
             assertTrue("original json key must remain", json.contains("\"key\": \"value\""))
             assertTrue("json must stay valid object", json.trim().startsWith("{") && json.trim().endsWith("}"))
 
@@ -52,9 +52,12 @@ class AssetsProtectionEngineTest {
 
             val junkEntries = zf.entries().asSequence()
                 .map { it.name }
-                .filter { it.startsWith("assets/molt_junk_") }
+                .filter { it.startsWith("assets/") && it.endsWith(".txt") }
                 .toList()
-            assertEquals("junk files must be injected", 2, junkEntries.size)
+            assertTrue(
+                "junk files must be injected (found ${junkEntries.size})",
+                junkEntries.size >= 2,
+            )
         }
     }
 
@@ -72,7 +75,7 @@ class AssetsProtectionEngineTest {
             ZipFile(zip).use { zf ->
                 val out = zf.getInputStream(zf.getEntry("assets/case.json"))
                     .use { it.readBytes().decodeToString() }
-                assertTrue("must gain a junk field: $json -> $out", out.contains("molt_"))
+                assertTrue("must be perturbed: $json -> $out", out != json)
                 // 合法性粗校验：花括号配对 + 非空对象时保持结构
                 assertEquals(
                     "brace balance must be preserved: $json -> $out",
@@ -106,7 +109,10 @@ class AssetsProtectionEngineTest {
 
         fun junkNames(zip: File): List<String> =
             ZipFile(zip).use { zf ->
-                zf.entries().asSequence().map { it.name }.filter { it.contains("molt_junk_") }.sorted().toList()
+                zf.entries().asSequence().map { it.name }
+                    .filter { it.startsWith("assets/") && it.endsWith(".txt") }
+                    .sorted()
+                    .toList()
             }
 
         assertEquals("same seed must reproduce same junk layout", junkNames(zipA), junkNames(zipB))

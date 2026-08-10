@@ -35,7 +35,7 @@ internal object AssetsProtectionEngine {
 
     private fun patch(input: File, output: File, config: AssetsProtectionConfig) {
         val random = SeedRandom.create(config.seed, "assets-protect")
-        val junkName = "molt_junk_${Math.abs(random.nextInt() % 100000)}"
+        val junkName = randomDirName(random)
         val junkEntryPrefix = "${config.assetsPrefix}$junkName/"
         val junkFiles = (0 until config.junkFileCount).map { index ->
             junkEntryPrefix + randomAssetName(random) to randomJunkContent(random)
@@ -114,7 +114,7 @@ internal object AssetsProtectionEngine {
         if (lastBrace <= 0) return null
         val head = text.substring(0, lastBrace).trimEnd()
         if (head.isEmpty() || head.endsWith(':')) return null
-        val field = "molt_${randomFieldName(random)}"
+        val field = randomFieldName(random)
         val value = randomFieldValue(random)
         if (head.endsWith('{')) {
             // 空对象（顶层 `{}` 或嵌套空对象作值）：字段注入到顶层 `{` 后，避免 `{,"molt"` 非法。
@@ -184,6 +184,13 @@ internal object AssetsProtectionEngine {
         val alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
         return buildString {
             repeat(8 + random.nextInt(16)) { append(alphabet[random.nextInt(alphabet.length)]) }
+        }
+    }
+
+    private fun randomDirName(random: java.util.Random): String {
+        val alphabet = "abcdefghijklmnopqrstuvwxyz"
+        return buildString {
+            repeat(3 + random.nextInt(5)) { append(alphabet[random.nextInt(alphabet.length)]) }
         }
     }
 

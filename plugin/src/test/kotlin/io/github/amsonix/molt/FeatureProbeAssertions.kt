@@ -207,10 +207,15 @@ object FeatureProbeAssertions {
             )
             val json = zf.getInputStream(zf.getEntry("assets/probe_config.json"))
                 .use { it.readBytes().decodeToString() }
-            assertTrue("assets json must gain a junk field", json.contains("molt_"))
+            assertTrue(
+                "assets json must be perturbed (featureless junk field)",
+                json != """{"api": "https://probe.example.com", "key": "v1"}""",
+            )
             assertTrue(
                 "seed-derived junk assets files must be injected",
-                zf.entries().asSequence().any { it.name.startsWith("assets/molt_junk_") },
+                zf.entries().asSequence().any {
+                    it.name.startsWith("assets/") && it.name.endsWith(".txt")
+                },
             )
         }
     }

@@ -126,7 +126,7 @@ R8 完成后对 DEX 做字符串加密：`const-string` 替换为 `Fog.d(...)` �
 | 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
 |------|------|--------|------|----------------|
 | `enabled` | `Boolean` | `false` | assets 扰动开关 | ✓ |
-| `filePatterns` | `List<String>` | `*.json`, `*.txt`, `*.properties` | 参与扰动的文件名 glob；含 `/` 的 pattern 按完整 entry 路径匹配 | — |
+| `filePatterns` | `List<String>` | `*.json`, `*.txt`, `*.properties`, `*.html`, `*.js`, `*.xml` | 参与扰动的文件名 glob；含 `/` 的 pattern 按完整 entry 路径匹配 | — |
 | `junkFileCount` | `Int` | `3` | 注入的假文件数量 | — |
 | `excludePatterns` | `List<String>` | 空 | 跳过的文件名/路径 glob | — |
 
