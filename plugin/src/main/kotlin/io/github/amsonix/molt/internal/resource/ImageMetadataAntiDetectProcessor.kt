@@ -35,7 +35,7 @@ internal object ImageMetadataAntiDetectProcessor {
         val ext = resolveImageExt(input.name)
         var bytes = input.readBytes()
         if (config.perceptualNoise) {
-            bytes = applyPerceptualNoise(bytes, ext, random) ?: bytes
+            bytes = applyPerceptualNoise(bytes, input.name, ext, random) ?: bytes
         }
         if (config.pngMicroCompress && ext == "png") {
             bytes = microCompressRaster(bytes, "png", config.microCompressQuality, random) ?: bytes
@@ -76,8 +76,10 @@ internal object ImageMetadataAntiDetectProcessor {
     fun md5Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("MD5").digest(bytes).joinToString("") { "%02x".format(it) }
 
-    private fun applyPerceptualNoise(bytes: ByteArray, ext: String, random: Random): ByteArray? = runCatching {
+    private fun applyPerceptualNoise(bytes: ByteArray, fileName: String, ext: String, random: Random): ByteArray? = runCatching {
         if (ext !in NOISE_EXTENSIONS) return null
+        // 9-patch（.9.png）边框像素承载拉伸语义，扰动会破坏 aapt2 校验（Invalid 9-patch）。
+        if (fileName.endsWith(".9.png")) return null
         val image = javax.imageio.ImageIO.read(bytes.inputStream()) ?: return null
         val pixelCount = image.width * image.height
         if (pixelCount <= 0) return null
@@ -141,7 +143,7 @@ internal object ImageMetadataAntiDetectProcessor {
         val ext = resolveImageExt(entryName.substringAfterLast('/'))
         var working = bytes
         if (config.perceptualNoise) {
-            working = applyPerceptualNoise(working, ext, random) ?: working
+            working = applyPerceptualNoise(working, entryName, ext, random) ?: working
         }
         if (config.pngMicroCompress && ext == "png") {
             working = microCompressRaster(working, "png", config.microCompressQuality, random) ?: working

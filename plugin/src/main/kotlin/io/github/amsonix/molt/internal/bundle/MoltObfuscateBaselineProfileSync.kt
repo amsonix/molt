@@ -73,13 +73,19 @@ internal object MoltObfuscateBaselineProfileSync {
             )
             return
         }
-        val result = ArtProfileSync.syncZipInPlace(
-            zipFile,
-            ArtProfileSync.Config(
-                humanReadable,
-                obfuscationMapping?.takeIf { it.isFile },
-            ),
-        )
+        val result = try {
+            ArtProfileSync.syncZipInPlace(
+                zipFile,
+                ArtProfileSync.Config(
+                    humanReadable,
+                    obfuscationMapping?.takeIf { it.isFile },
+                ),
+            )
+        } catch (e: Exception) {
+            val message = "molt: baseline profile sync failed (${e.message}; artifact=${zipFile.name})"
+            if (failOnSyncFailure) error(message) else logInfo(message)
+            return
+        }
         if (result.synced) {
             logLifecycle("molt: ${result.message} artifact=${zipFile.name}")
             return

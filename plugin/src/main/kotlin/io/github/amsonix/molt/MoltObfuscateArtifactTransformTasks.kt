@@ -260,6 +260,7 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
                     null
                 },
                 assetsEncrypt = buildAssetsEncryptConfig(bundleImageSeed.get()),
+                dexPerturb = postR8Config.dexPerturb,
                 onWarning = { warning -> logger.warn("$name: $warning") },
             ),
         )
