@@ -41,6 +41,8 @@ internal object BundleResourceObfuscateEngine {
         val obfuscationMapping: File? = null,
         val assetsProtect: AssetsProtectionConfig? = null,
         val assetsEncrypt: AssetsEncryptConfig? = null,
+        /** 构建期告警回调（Gradle logger；java.util.logging 在 Gradle 不可见）。 */
+        val onWarning: (String) -> Unit = {},
     )
 
     data class Result(
@@ -50,6 +52,7 @@ internal object BundleResourceObfuscateEngine {
         val componentManifestFiles: Int = 0,
         val viewLayoutFiles: Int = 0,
         val imagePatchRecords: List<ImagePatchRecord> = emptyList(),
+        val assetEncryptWarnings: List<String> = emptyList(),
     )
 
     fun obfuscate(config: Config): Result {
@@ -120,8 +123,13 @@ internal object BundleResourceObfuscateEngine {
         config.assetsProtect?.let { assetsConfig ->
             AssetsProtectionEngine.patchZipInPlace(config.outputAab, assetsConfig)
         }
+        val assetEncryptWarnings = mutableListOf<String>()
         config.assetsEncrypt?.let { assetsEncryptConfig ->
-            ZipAssetEncryptor.patchZipInPlace(config.outputAab, assetsEncryptConfig, "base/assets/")
+            val assetResult = ZipAssetEncryptor.patchZipInPlace(config.outputAab, assetsEncryptConfig, "base/assets/")
+            assetResult.warnings.forEach { warning ->
+                assetEncryptWarnings.add(warning)
+                config.onWarning(warning)
+            }
         }
 
         if (config.signing.isComplete) {
@@ -153,6 +161,7 @@ internal object BundleResourceObfuscateEngine {
             else -> null
         }
         return Result(
+            assetEncryptWarnings = assetEncryptWarnings,
             outputAab = config.outputAab,
             resourcesMappingFile = resourcesMapping,
             dexFiles = dexFiles,

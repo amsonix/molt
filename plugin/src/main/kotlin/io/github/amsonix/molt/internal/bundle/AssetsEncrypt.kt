@@ -357,7 +357,36 @@ internal object ZipAssetEncryptor {
         AAPT2_NO_COMPRESS_EXTENSIONS.any { path.endsWith(it, ignoreCase = true) }
 
     /** patch 结果统计：加密数、openFd 引用排除数、媒体扩展名排除数、清单内无常量 open 调用点跳过数。 */
-    data class Result(val encrypted: Int, val fdExcluded: Int, val mediaSkipped: Int, val noCallSite: Int)
+    data class Result(
+        val encrypted: Int,
+        val fdExcluded: Int,
+        val mediaSkipped: Int,
+        val noCallSite: Int,
+        private val extraWarnings: List<String> = emptyList(),
+    ) {
+        /** 构建期告警（调用方经 Gradle logger 输出——java.util.logging 在 Gradle 不可见）。 */
+        val warnings: List<String> = buildList {
+            if (mediaSkipped > 0) {
+                add(
+                    "molt: ${mediaSkipped} manifest asset(s) are AAPT no-compress media extensions " +
+                        "(jpg/png/mp4/mp3/ttf/...) and were kept plaintext — media must stay decodable",
+                )
+            }
+            if (fdExcluded > 0) {
+                add(
+                    "molt: ${fdExcluded} asset(s) referenced by AssetManager.openFd/openNonAssetFd " +
+                        "were kept plaintext (fd reads bypass the FogAssets rewrite)",
+                )
+            }
+            if (noCallSite > 0) {
+                add(
+                    "molt: ${noCallSite} manifest asset(s) have no constant AssetManager.open() call site; " +
+                        "kept plaintext (dynamic-path / reflection reads cannot be decrypted)",
+                )
+            }
+            addAll(extraWarnings)
+        }
+    }
 
     fun patchZipInPlace(zipFile: File, config: AssetsEncryptConfig, assetsPrefix: String): Result {
         if (config.filePatterns.isEmpty()) return Result(0, 0, 0, 0)
@@ -366,6 +395,7 @@ internal object ZipAssetEncryptor {
         var fdExcluded = 0
         var mediaSkipped = 0
         var noCallSite = 0
+        val webViewWarnings = mutableListOf<String>()
         try {
             java.util.zip.ZipFile(zipFile).use { zipIn ->
                 // 加密决策由读取机制决定（不依赖 zip method——AAPT2 对极小文件也 STORED，不可靠）：
@@ -404,7 +434,7 @@ internal object ZipAssetEncryptor {
                             }
                             inAssets && relativePath in openReferenced && matches(entry.name, config.filePatterns) -> {
                                 val bytes = zipIn.getInputStream(entry).use { it.readBytes() }
-                                warnOnWebViewReferences(zipFile, entry.name, bytes)
+                                warnOnWebViewReferences(entry.name, bytes, webViewWarnings)
                                 // 密钥按相对 assets 的路径派生（与运行时 FogAssets.open(path) 一致）。
                                 val encryptedBytes = encryptBytes(relativePath, bytes, config.seed)
                                 io.github.amsonix.molt.internal.bundle.ZipEntryWriter.writeBytes(
@@ -438,27 +468,7 @@ internal object ZipAssetEncryptor {
         } finally {
             temp.delete()
         }
-        val logger = java.util.logging.Logger.getLogger(ZipAssetEncryptor::class.java.name)
-        logger.info("molt: assets encrypted=$encrypted fdExcluded=$fdExcluded mediaSkipped=$mediaSkipped noCallSite=$noCallSite")
-        if (mediaSkipped > 0) {
-            logger.warning(
-                "molt: ${mediaSkipped} manifest asset(s) are AAPT no-compress media extensions " +
-                    "(jpg/png/mp4/mp3/...) and were kept plaintext — media must stay decodable",
-            )
-        }
-        if (fdExcluded > 0) {
-            logger.warning(
-                "molt: ${fdExcluded} asset(s) referenced by AssetManager.openFd/openNonAssetFd " +
-                    "were kept plaintext (fd reads bypass the FogAssets rewrite)",
-            )
-        }
-        if (noCallSite > 0) {
-            logger.warning(
-                "molt: ${noCallSite} manifest asset(s) have no constant AssetManager.open() call site; " +
-                    "kept plaintext (dynamic-path / reflection reads cannot be decrypted)",
-            )
-        }
-        return Result(encrypted, fdExcluded, mediaSkipped, noCallSite)
+        return Result(encrypted, fdExcluded, mediaSkipped, noCallSite, webViewWarnings)
     }
 
     private fun scanReferencedAssets(
@@ -491,18 +501,17 @@ internal object ZipAssetEncryptor {
      * WebView 盲区告警：加密清单中的 html/js 若引用 `file:///android_asset/`，
      * WebView 内部读取不走 FogAssets（DEX 无调用点），加密后必然打不开——构建期直接告警。
      */
-    private fun warnOnWebViewReferences(zipFile: File, entryName: String, bytes: ByteArray) {
+    private fun warnOnWebViewReferences(entryName: String, bytes: ByteArray, warnings: MutableList<String>) {
         val ext = entryName.substringAfterLast('.', "")
         if (ext !in setOf("html", "htm", "js")) return
         val text = runCatching { String(bytes, Charsets.UTF_8) }.getOrNull() ?: return
         if (!text.contains("file:///android_asset/")) return
         val referenced = WEBVIEW_ASSET_REFERENCE.findAll(text).map { it.value }.toList().take(5)
-        java.util.logging.Logger.getLogger(ZipAssetEncryptor::class.java.name)
-            .warning(
-                "molt: $entryName references android_asset via WebView ($referenced); " +
-                    "these files are NOT decryptable by FogAssets — exclude them from " +
-                    "assetsEncrypt.filePatterns or switch to getAssets().open()",
-            )
+        warnings.add(
+            "molt: $entryName references android_asset via WebView ($referenced); " +
+                "these files are NOT decryptable by FogAssets — exclude them from " +
+                "assetsEncrypt.filePatterns or switch to getAssets().open()",
+        )
     }
 
     fun matches(path: String, patterns: List<String>): Boolean {

@@ -260,6 +260,7 @@ abstract class MoltObfuscateTransformBundleTask : DefaultTask() {
                     null
                 },
                 assetsEncrypt = buildAssetsEncryptConfig(bundleImageSeed.get()),
+                onWarning = { warning -> logger.warn("$name: $warning") },
             ),
         )
         MoltObfuscateTransformVerify.appendImagePatchRecords(
@@ -668,7 +669,8 @@ abstract class MoltObfuscateTransformApkTask : DefaultTask() {
             )
         }
         buildAssetsEncryptConfig(seed.get())?.let { assetsEncryptConfig ->
-            ZipAssetEncryptor.patchZipInPlace(unsignedOut, assetsEncryptConfig, "assets/")
+            val assetResult = ZipAssetEncryptor.patchZipInPlace(unsignedOut, assetsEncryptConfig, "assets/")
+            assetResult.warnings.forEach { logger.warn("$name: $it") }
         }
         val alignedOut = File(workDir, "aligned.apk")
         ApkZipAligner.align(unsignedOut, alignedOut)
