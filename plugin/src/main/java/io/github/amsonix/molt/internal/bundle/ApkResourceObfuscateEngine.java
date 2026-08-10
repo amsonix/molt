@@ -355,7 +355,8 @@ public final class ApkResourceObfuscateEngine {
                             entry,
                             outputName,
                             rewrittenTable,
-                            !Arrays.equals(originalTable, rewrittenTable)
+                            !Arrays.equals(originalTable, rewrittenTable),
+                            false
                     );
                 } else if (config.imageAntiDetectFallback
                         && ApkImageEntryPatcher.isImageEntry(outputName)) {
@@ -385,7 +386,8 @@ public final class ApkResourceObfuscateEngine {
                             entry,
                             outputName,
                             patched,
-                            !Arrays.equals(original, patched)
+                            !Arrays.equals(original, patched),
+                            false
                     );
                 } else {
                     ZipEntryWriter.copy(zipOut, zipIn, entry, outputName);

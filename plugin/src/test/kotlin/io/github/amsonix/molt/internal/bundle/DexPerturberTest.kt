@@ -12,6 +12,7 @@ import org.jf.dexlib2.immutable.instruction.ImmutableInstruction11n
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.jf.dexlib2.writer.pool.DexPool
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -97,5 +98,22 @@ class DexPerturberTest {
 
         val c = buildDex(DexPerturber.rewriteClass(openDex(input).classes.first(), DexPerturbationConfig(seed = 43)))
         assertTrue("different seed must differ", !a.contentEquals(c))
+    }
+
+    @Test
+    fun remapBytes_perturbOnly_withoutStringEncrypt_doesNotNpeAndPerturbs() {
+        val input = buildDex(buildClass("com.example.app.Main", methodCount = 2))
+        val emptyMapping = io.github.amsonix.molt.internal.rename.RenameMapping.fromForward(emptyMap())
+        val config = DexPerturbationConfig(seed = 7, intensity = "light")
+
+        val output = DexInPlaceRenameEngine.remapBytes(input, emptyMapping, null, null, config, null)
+
+        assertFalse("perturb-only dex must be rewritten (regression: stringConfig==null NPE)", output.contentEquals(input))
+        val parsed = openDex(output)
+        val nops = parsed.classes.first().directMethods
+            .mapNotNull { it.implementation }
+            .flatMap { it.instructions }
+            .count { it.opcode == Opcode.NOP }
+        assertTrue("nops must be present: $nops", nops > 0)
     }
 }
