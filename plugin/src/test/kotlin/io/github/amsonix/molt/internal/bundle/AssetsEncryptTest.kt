@@ -273,6 +273,68 @@ class AssetsEncryptTest {
         assertTrue("must be invoke-static/range", opcode == Opcode.INVOKE_STATIC_RANGE)
     }
 
+    @Test
+    fun fogAssetsClass_ownOpenCall_isNotRewritten() {
+        val owner = "Lcom/example/app/shell/fogassets/FogAssets;"
+        val openTarget = ImmutableMethodReference(
+            "Landroid/content/res/AssetManager;",
+            "open",
+            listOf("Ljava/lang/String;"),
+            "Ljava/io/InputStream;",
+        )
+        val call = ImmutableInstruction35c(
+            Opcode.INVOKE_VIRTUAL,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            openTarget,
+        )
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "open",
+                    listOf(org.jf.dexlib2.immutable.ImmutableMethodParameter("Ljava/lang/String;", emptySet(), null)),
+                    "Ljava/io/InputStream;",
+                    AccessFlags.PUBLIC.value or AccessFlags.STATIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        2,
+                        listOf(call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        val input = buildDex(clazz)
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
+        val rebuilt = buildDex(output)
+        val parsed = openDex(rebuilt)
+
+        val method = parsed.classes.first().directMethods.first()
+        val instruction = method.implementation!!.instructions.first() as ReferenceInstruction
+        val ref = instruction.reference as MethodReference
+        assertEquals(
+            "FogAssets 自身调用必须保持 AssetManager.open（否则自递归）",
+            "Landroid/content/res/AssetManager;",
+            ref.definingClass,
+        )
+    }
+
     private fun buildDex(vararg classes: org.jf.dexlib2.iface.ClassDef): ByteArray {
         val pool = DexPool(Opcodes.getDefault())
         classes.forEach(pool::internClass)

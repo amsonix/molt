@@ -138,7 +138,7 @@ final class DexBinaryPatchWriter {
             DexBackedDexFile dexFile,
             AssetsEncryptConfig assetsEncrypt
     ) {
-        return assetsEncrypt != null && DexAssetEncryptor.INSTANCE.containsAssetsEncryptableClass(dexFile);
+        return assetsEncrypt != null && DexAssetEncryptor.INSTANCE.containsAssetsEncryptableClass(dexFile, assetsEncrypt);
     }
 
     private static boolean anyTypeNeedsRewrite(

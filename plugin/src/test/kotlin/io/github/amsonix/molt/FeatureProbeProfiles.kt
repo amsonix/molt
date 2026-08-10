@@ -226,6 +226,29 @@ object FeatureProbeProfiles {
                 public java.io.InputStream read2() throws java.io.IOException {
                     return getAssets().open("secret.cfg", 0);
                 }
+
+                @Override
+                protected void onCreate(android.os.Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                    try {
+                        String a = new String(streamBytes(read()), "UTF-8");
+                        String b = new String(streamBytes(read2()), "UTF-8");
+                        android.util.Log.i("MoltProbe", "molt fog probe marker 1arg=" + a.trim() + " 2arg=" + b.trim());
+                    } catch (Exception e) {
+                        android.util.Log.e("MoltProbe", "fog probe exception", e);
+                        throw new RuntimeException("fog probe failed", e);
+                    }
+                }
+
+                private static byte[] streamBytes(java.io.InputStream in) throws java.io.IOException {
+                    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[256];
+                    int n;
+                    while ((n = in.read(buf)) > 0) {
+                        out.write(buf, 0, n);
+                    }
+                    return out.toByteArray();
+                }
             }
             """.trimIndent(),
         )
