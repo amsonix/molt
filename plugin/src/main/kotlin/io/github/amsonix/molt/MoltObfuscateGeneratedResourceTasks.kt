@@ -4,6 +4,7 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
@@ -135,6 +136,10 @@ abstract class MoltObfuscateGenerateJunkKeepTask : DefaultTask() {
     @get:Input
     abstract val fogAssetsEnabled: Property<Boolean>
 
+    /** 应用 applicationId 列表（wiring 按 variant 收集）——fog keep 规则按精确 appId 前缀生成。 */
+    @get:Input
+    abstract val applicationIds: ListProperty<String>
+
     @get:OutputFile
     abstract val outputFile: RegularFileProperty
 
@@ -154,13 +159,18 @@ abstract class MoltObfuscateGenerateJunkKeepTask : DefaultTask() {
                     appendLine("-keep class ${packagePrefix.get()}.** { *; }")
                 }
                 if (fogEnabled.get()) {
-                    // 类名由 seed 派生（每次构建不同）——keep 用包通配（shell.fog 为 molt 专属命名空间）。
+                    // 类名由 seed 派生（每次构建不同）；规则按精确 applicationId 前缀生成，
+                    // 避免 `**` 通配误伤用户自身含 shell.fog 段的类。
                     appendLine("# molt: generated fog keep rules")
-                    appendLine("-keep class **.shell.fog.* { *; }")
+                    applicationIds.get().distinct().forEach { appId ->
+                        appendLine("-keep class $appId.shell.fog.* { *; }")
+                    }
                 }
                 if (fogAssetsEnabled.get()) {
                     appendLine("# molt: generated fog-assets keep rules")
-                    appendLine("-keep class **.shell.fogassets.* { *; }")
+                    applicationIds.get().distinct().forEach { appId ->
+                        appendLine("-keep class $appId.shell.fogassets.* { *; }")
+                    }
                 }
             },
         )

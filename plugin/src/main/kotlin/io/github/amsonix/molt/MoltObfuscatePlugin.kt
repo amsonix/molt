@@ -8,6 +8,7 @@ import io.github.amsonix.molt.internal.util.ObfuscationMappingFileResolver
 import io.github.amsonix.molt.internal.util.variantCapitalizedName
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.kotlin.dsl.named
 import org.gradle.kotlin.dsl.register
 import java.io.File
 
@@ -46,6 +47,9 @@ class MoltObfuscatePlugin : Plugin<Project> {
         androidComponents.onVariants(androidComponents.selector().all()) { variant ->
             if (!shouldRegister(extension, variant.buildType)) return@onVariants
             val applicationId = variant.applicationId.get()
+            // fog keep 规则按精确 appId 前缀生成（见 MoltObfuscateGenerateJunkKeepTask）。
+            project.tasks.named<MoltObfuscateGenerateJunkKeepTask>("moltObfuscateGenerateJunkKeep")
+                .get().applicationIds.add(applicationId)
             val seed = extension.resolveSeed(variant.name, applicationId)
             val prepareTask = MoltObfuscateVariantWiring.registerPrepareMappingTask(
                 project,
