@@ -24,6 +24,9 @@
 - 修复 `configureApk/AabTransformFixture` 末尾 `writeLauncherActivity` **无条件覆盖 preset 定制的 MainActivity**（导致 marker 被抹掉、F19 假失败）——改为幂等（已存在则跳过）
 - 修复 feature probe fixture：marker 字符串由「从未调用的静态方法」改为 onCreate 中真实打印——此前 F16 的「明文残留 0」可能因 R8 shrink 掉未用代码而**假阳性**
 
+- 修复 `assetsProtect`：JSON 注入用引号状态机定位对象闭合（字符串值内 `}` 不再干扰），嵌套空对象（`{"a": {}}`）场景改为注入顶层 `{` 后——此前会产生非法 JSON
+- 优化 `assetsProtect`：未命中扰动清单的 entry 走 `ZipEntryWriter.copy` 保留原始压缩流，避免全量重压缩（大 APK 构建提速）
+
 ### Docs
 
 - AGP 支持下限更新为 **8.0.0**：2026-08-07 单独探测 AGP 8.0.0 + Gradle 8.0（smoke / APK / AAB / rename 共 5/5 PASS）；README / COMPATIBILITY 双语同步
