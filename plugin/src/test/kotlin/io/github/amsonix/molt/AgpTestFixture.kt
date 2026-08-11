@@ -403,10 +403,14 @@ object AgpTestFixture {
         arrayOf(*tasks, "--no-build-cache", "--stacktrace", "--console=plain")
 
     fun createRunner(context: RunContext): GradleRunner {
-        val env = linkedMapOf(
-            "GRADLE_USER_HOME" to context.gradleUserHome.absolutePath,
-            "GRADLE_OPTS" to probeGradleOpts(),
-        )
+        // withEnvironment 会整体替换嵌套构建的环境，必须先把系统环境并进来，
+        // 否则 ANDROID_HOME / ANDROID_SDK_ROOT / PATH 等全部丢失
+        // （Linux CI 上 zipalign 定位失败即源于此）。
+        val env = linkedMapOf<String, String>().apply {
+            putAll(System.getenv())
+            put("GRADLE_USER_HOME", context.gradleUserHome.absolutePath)
+            put("GRADLE_OPTS", probeGradleOpts())
+        }
         probeJavaHome(context.config)?.let { javaHome ->
             env["JAVA_HOME"] = javaHome.absolutePath
         } ?: check(!requiresJdk17ForGradle(context.config.gradleVersion)) {
