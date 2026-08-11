@@ -18,18 +18,25 @@ internal object KeepXmlDiscovery {
 
     // AGP 8/9 的 app 与 library 扩展都实现新 DSL CommonExtension
     // （AGP 9 移除了旧 com.android.build.gradle.AppExtension / BaseExtension 注册）。
-    fun discoverInAndroidProject(android: CommonExtension<*, *, *, *, *, *>?): List<File> {
+    fun discoverInAndroidProject(
+        project: Project,
+        android: CommonExtension<*, *, *, *, *, *>?,
+    ): List<File> {
         if (android == null) return emptyList()
-        return keepXmlFilesInResDirs(android.sourceSets.flatMap { SourceSetDirectoriesCompat.of(it, "getRes") })
+        return keepXmlFilesInResDirs(
+            android.sourceSets.flatMap { SourceSetDirectoriesCompat.of(project, it, "getRes") },
+        )
     }
 
-    fun discoverInProject(project: Project): List<File> =
-        discoverInAndroidProject(project.extensions.findByType(CommonExtension::class.java))
+    fun discoverInProject(project: Project): List<File> {
+        val ext = project.extensions.findByType(CommonExtension::class.java)
+        return discoverInAndroidProject(project, ext)
+    }
 
     fun discoverForVariant(appProject: Project, variantName: String): List<File> {
         val result = linkedSetOf<File>()
         val appAndroid = appProject.extensions.findByType(CommonExtension::class.java)
-        discoverInAndroidProject(appAndroid).forEach { result.add(it) }
+        discoverInAndroidProject(appProject, appAndroid).forEach { result.add(it) }
         AppLibraryDependencyGraph.resolveLibraryProjects(appProject, listOf(variantName))
             .forEach { library -> discoverInProject(library).forEach { result.add(it) } }
         return result.toList()

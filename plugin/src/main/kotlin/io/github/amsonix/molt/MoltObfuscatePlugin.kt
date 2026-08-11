@@ -75,7 +75,7 @@ class MoltObfuscatePlugin : Plugin<Project> {
             val selectedSourceSets = MoltObfuscateDescriptorWiring.collectVariantSourceSets(android, variant)
             val sourceSetNames = MoltObfuscateDescriptorWiring.collectVariantSourceSetNames(variant)
             val sourceRoots = selectedSourceSets.flatMap { sourceSet ->
-                SourceSetDirectoriesCompat.of(sourceSet, "getJava") +
+                SourceSetDirectoriesCompat.of(project, sourceSet, "getJava") +
                     File(project.projectDir, "src/${sourceSet.name}/kotlin")
             }.distinctBy { it.absoluteFile.normalize() }
             val manifests = selectedSourceSets.mapNotNull { sourceSet ->

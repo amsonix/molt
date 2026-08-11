@@ -55,7 +55,7 @@ internal object MoltObfuscateDescriptorWiring {
         prepareTask: TaskProvider<MoltObfuscatePrepareMappingTask>,
         sourceRoots: List<File> = collectDescriptorSourceRoots(project, android),
         manifests: List<File> = collectDescriptorManifestFiles(project, android),
-        layoutDirs: List<File> = collectDescriptorLayoutDirs(android),
+        layoutDirs: List<File> = collectDescriptorLayoutDirs(project, android),
     ) {
         prepareTask.configure {
             dependsOn(descriptorTask)
@@ -112,7 +112,7 @@ internal object MoltObfuscateDescriptorWiring {
         sourceSetNames: List<String>,
     ): List<File> {
         val fromAgp = sourceSetNames.mapNotNull(android.sourceSets::findByName)
-            .flatMap { SourceSetDirectoriesCompat.of(it, "getRes") }
+            .flatMap { SourceSetDirectoriesCompat.of(project, it, "getRes") }
             .filter { it.isDirectory && isProjectResSourceDir(project, it) }
             .distinctBy { it.absoluteFile.normalize() }
         val fromSourceTree = conventionalVariantResDirs(project, sourceSetNames)
@@ -176,7 +176,7 @@ internal object MoltObfuscateDescriptorWiring {
             descriptorTask = descriptorTask,
             sourceRoots = collectDescriptorSourceRoots(project, android),
             manifests = collectDescriptorManifestFiles(project, android),
-            layoutDirs = collectDescriptorLayoutDirs(android),
+            layoutDirs = collectDescriptorLayoutDirs(project, android),
         )
         return descriptorTask
     }
@@ -204,7 +204,7 @@ internal object MoltObfuscateDescriptorWiring {
         listOf(
             File(project.projectDir, "src/main/java"),
             File(project.projectDir, "src/main/kotlin"),
-        ) + android.sourceSets.flatMap { SourceSetDirectoriesCompat.of(it, "getJava") }
+        ) + android.sourceSets.flatMap { SourceSetDirectoriesCompat.of(project, it, "getJava") }
     ).distinctBy { it.absoluteFile.normalize() }
 
     private fun collectDescriptorManifestFiles(
@@ -219,8 +219,11 @@ internal object MoltObfuscateDescriptorWiring {
             }
             .distinctBy { it.absoluteFile.normalize() }
 
-    private fun collectDescriptorLayoutDirs(android: CommonExtension<*, *, *, *, *, *>): List<File> =
-        collectLayoutDirs(android.sourceSets.flatMap { set -> SourceSetDirectoriesCompat.of(set, "getRes") })
+    private fun collectDescriptorLayoutDirs(
+        project: Project,
+        android: CommonExtension<*, *, *, *, *, *>,
+    ): List<File> =
+        collectLayoutDirs(android.sourceSets.flatMap { set -> SourceSetDirectoriesCompat.of(project, set, "getRes") })
 }
 
 private fun File.pathRelativeTo(base: File): String =
