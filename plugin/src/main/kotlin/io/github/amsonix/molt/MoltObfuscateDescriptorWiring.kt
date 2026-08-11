@@ -1,9 +1,7 @@
 package io.github.amsonix.molt
 
+import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.variant.ApplicationVariant
-import com.android.build.gradle.AppExtension
-import com.android.build.gradle.BaseExtension
-import com.android.build.gradle.LibraryExtension
 import io.github.amsonix.molt.internal.util.AppLibraryDependencyGraph
 import io.github.amsonix.molt.internal.util.variantCapitalizedName
 import org.gradle.api.Project
@@ -29,7 +27,7 @@ internal object MoltObfuscateDescriptorWiring {
 
     fun registerVariantDescriptorTask(
         project: Project,
-        android: BaseExtension,
+        android: CommonExtension<*, *, *, *, *, *>,
         variantName: String,
         sourceRoots: List<File>,
         manifests: List<File>,
@@ -51,11 +49,11 @@ internal object MoltObfuscateDescriptorWiring {
 
     fun addDescriptorToPrepare(
         project: Project,
-        android: BaseExtension,
+        android: CommonExtension<*, *, *, *, *, *>,
         descriptorTask: TaskProvider<MoltObfuscateWriteDescriptorTask>,
         prepareTask: TaskProvider<MoltObfuscatePrepareMappingTask>,
         sourceRoots: List<File> = collectDescriptorSourceRoots(project, android),
-        manifests: List<File> = collectDescriptorManifestFiles(android),
+        manifests: List<File> = collectDescriptorManifestFiles(project, android),
         layoutDirs: List<File> = collectDescriptorLayoutDirs(android),
     ) {
         prepareTask.configure {
@@ -89,7 +87,7 @@ internal object MoltObfuscateDescriptorWiring {
         }.distinct()
 
     fun collectVariantSourceSets(
-        android: AppExtension,
+        android: CommonExtension<*, *, *, *, *, *>,
         variant: ApplicationVariant,
     ) = collectVariantSourceSetNames(variant).mapNotNull(android.sourceSets::findByName)
 
@@ -99,7 +97,7 @@ internal object MoltObfuscateDescriptorWiring {
      */
     fun collectVariantResDirs(
         project: Project,
-        android: AppExtension,
+        android: CommonExtension<*, *, *, *, *, *>,
         variant: ApplicationVariant,
     ): List<File> = collectVariantResDirs(
         project = project,
@@ -109,11 +107,11 @@ internal object MoltObfuscateDescriptorWiring {
 
     fun collectVariantResDirs(
         project: Project,
-        android: AppExtension,
+        android: CommonExtension<*, *, *, *, *, *>,
         sourceSetNames: List<String>,
     ): List<File> {
         val fromAgp = sourceSetNames.mapNotNull(android.sourceSets::findByName)
-            .flatMap { it.res.srcDirs }
+            .flatMap { it.res.directories.map(::File) }
             .filter { it.isDirectory && isProjectResSourceDir(project, it) }
             .distinctBy { it.absoluteFile.normalize() }
         val fromSourceTree = conventionalVariantResDirs(project, sourceSetNames)
@@ -153,14 +151,14 @@ internal object MoltObfuscateDescriptorWiring {
         prepareTask: TaskProvider<MoltObfuscatePrepareMappingTask>,
     ) {
         val descriptorTask = registerSharedDescriptorTask(library) ?: return
-        val android = library.extensions.findByType(BaseExtension::class.java) ?: return
+        val android = library.extensions.findByType(CommonExtension::class.java) ?: return
         addDescriptorToPrepare(library, android, descriptorTask, prepareTask)
     }
 
     private fun registerSharedDescriptorTask(
         project: Project,
     ): TaskProvider<MoltObfuscateWriteDescriptorTask>? {
-        val android = project.extensions.findByType(BaseExtension::class.java) ?: return null
+        val android = project.extensions.findByType(CommonExtension::class.java) ?: return null
         val existing = project.tasks.findByName("moltObfuscateWriteDescriptor")
         val descriptorTask = if (existing != null) {
             project.tasks.named("moltObfuscateWriteDescriptor", MoltObfuscateWriteDescriptorTask::class.java)
@@ -176,7 +174,7 @@ internal object MoltObfuscateDescriptorWiring {
             android = android,
             descriptorTask = descriptorTask,
             sourceRoots = collectDescriptorSourceRoots(project, android),
-            manifests = collectDescriptorManifestFiles(android),
+            manifests = collectDescriptorManifestFiles(project, android),
             layoutDirs = collectDescriptorLayoutDirs(android),
         )
         return descriptorTask
@@ -184,20 +182,14 @@ internal object MoltObfuscateDescriptorWiring {
 
     private fun configureDescriptorTask(
         project: Project,
-        android: BaseExtension,
+        android: CommonExtension<*, *, *, *, *, *>,
         descriptorTask: TaskProvider<MoltObfuscateWriteDescriptorTask>,
         sourceRoots: List<File>,
         manifests: List<File>,
         layoutDirs: List<File>,
     ) {
         descriptorTask.configure {
-            namespace.set(
-                when (android) {
-                    is AppExtension -> android.namespace
-                    is LibraryExtension -> android.namespace
-                    else -> null
-                }.orEmpty(),
-            )
+            namespace.set(android.namespace)
             sourceRootPaths.set(sourceRoots.map { it.pathRelativeTo(project.projectDir) })
             manifestPaths.set(manifests.map { it.pathRelativeTo(project.projectDir) })
             layoutDirPaths.set(layoutDirs.map { it.pathRelativeTo(project.projectDir) })
@@ -206,20 +198,28 @@ internal object MoltObfuscateDescriptorWiring {
 
     private fun collectDescriptorSourceRoots(
         project: Project,
-        android: BaseExtension,
+        android: CommonExtension<*, *, *, *, *, *>,
     ): List<File> = (
         listOf(
             File(project.projectDir, "src/main/java"),
             File(project.projectDir, "src/main/kotlin"),
-        ) + android.sourceSets.flatMap { it.java.srcDirs }
+        ) + android.sourceSets.flatMap { it.java.directories.map(::File) }
     ).distinctBy { it.absoluteFile.normalize() }
 
-    private fun collectDescriptorManifestFiles(android: BaseExtension): List<File> =
-        android.sourceSets.map { it.manifest.srcFile }
+    private fun collectDescriptorManifestFiles(
+        project: Project,
+        android: CommonExtension<*, *, *, *, *, *>,
+    ): List<File> =
+        android.sourceSets
+            .mapNotNull { sourceSet ->
+                // 新 DSL AndroidSourceFile 无读取访问器；manifest 采用约定路径。
+                File(project.projectDir, "src/${sourceSet.name}/AndroidManifest.xml")
+                    .takeIf { it.isFile }
+            }
             .distinctBy { it.absoluteFile.normalize() }
 
-    private fun collectDescriptorLayoutDirs(android: BaseExtension): List<File> =
-        collectLayoutDirs(android.sourceSets.flatMap { set -> set.res.srcDirs })
+    private fun collectDescriptorLayoutDirs(android: CommonExtension<*, *, *, *, *, *>): List<File> =
+        collectLayoutDirs(android.sourceSets.flatMap { set -> set.res.directories.map(::File) })
 }
 
 private fun File.pathRelativeTo(base: File): String =
