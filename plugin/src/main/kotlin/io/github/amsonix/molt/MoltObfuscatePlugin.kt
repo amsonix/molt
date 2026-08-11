@@ -1,8 +1,8 @@
 package io.github.amsonix.molt
 
+import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
-import com.android.build.gradle.AppExtension
 import io.github.amsonix.molt.internal.util.MoltObfuscateDefaults
 import io.github.amsonix.molt.internal.util.ObfuscationMappingFileResolver
 import io.github.amsonix.molt.internal.util.variantCapitalizedName
@@ -32,17 +32,31 @@ class MoltObfuscatePlugin : Plugin<Project> {
                     )
             }
             configureApplication(target, extension)
-            target.tasks.register("moltPrintVariantPlan", MoltPrintVariantPlanTask::class.java)
         }
     }
 
     private fun configureApplication(project: Project, extension: MoltObfuscateExtension) {
         val androidComponents = project.extensions.getByType(ApplicationAndroidComponentsExtension::class.java)
-        val android = project.extensions.getByType(AppExtension::class.java)
+        // AGP 9 移除了旧 com.android.build.gradle.AppExtension 注册；统一走稳定新 DSL。
+        val android = project.extensions.getByType(ApplicationExtension::class.java)
         wireApplicationIdDefaults(project, android, extension)
         wireJunkProguardKeep(project, android, extension)
-        wireShrinkKeepValidation(project, extension, android)
-        wireReleaseMinifyValidation(project, extension, android)
+        wireShrinkKeepValidation(project, extension, androidComponents)
+        wireReleaseMinifyValidation(project, extension, android, androidComponents)
+
+        project.tasks.register("moltPrintVariantPlan", MoltPrintVariantPlanTask::class.java) {
+            androidComponents.onVariants { variant ->
+                variantPlans.add(
+                    MoltVariantPlanEntry(
+                        variantName = variant.name,
+                        applicationId = variant.applicationId.orNull ?: "",
+                        buildType = variant.buildType.orEmpty(),
+                        minifyEnabled = android.buildTypes.findByName(variant.buildType.orEmpty())
+                            ?.isMinifyEnabled ?: false,
+                    ),
+                )
+            }
+        }
 
         androidComponents.onVariants(androidComponents.selector().all()) { variant ->
             if (!shouldRegister(extension, variant.buildType)) return@onVariants
@@ -60,9 +74,12 @@ class MoltObfuscatePlugin : Plugin<Project> {
             val selectedSourceSets = MoltObfuscateDescriptorWiring.collectVariantSourceSets(android, variant)
             val sourceSetNames = MoltObfuscateDescriptorWiring.collectVariantSourceSetNames(variant)
             val sourceRoots = selectedSourceSets.flatMap { sourceSet ->
-                sourceSet.java.srcDirs + File(project.projectDir, "src/${sourceSet.name}/kotlin")
+                sourceSet.java.directories.map(::File) +
+                    File(project.projectDir, "src/${sourceSet.name}/kotlin")
             }.distinctBy { it.absoluteFile.normalize() }
-            val manifests = selectedSourceSets.map { it.manifest.srcFile }
+            val manifests = selectedSourceSets.mapNotNull { sourceSet ->
+                File(project.projectDir, "src/${sourceSet.name}/AndroidManifest.xml").takeIf { it.isFile }
+            }
             val layoutDirs = MoltObfuscateDescriptorWiring.collectLayoutDirs(
                 MoltObfuscateDescriptorWiring.collectVariantResDirs(project, android, sourceSetNames),
             )
@@ -144,7 +161,7 @@ class MoltObfuscatePlugin : Plugin<Project> {
 
     private fun wireApplicationIdDefaults(
         project: Project,
-        android: AppExtension,
+        android: ApplicationExtension,
         extension: MoltObfuscateExtension,
     ) {
         val applicationIdProvider = project.provider {
@@ -181,31 +198,33 @@ class MoltObfuscatePlugin : Plugin<Project> {
     private fun wireReleaseMinifyValidation(
         project: Project,
         extension: MoltObfuscateExtension,
-        android: AppExtension,
+        android: ApplicationExtension,
+        androidComponents: ApplicationAndroidComponentsExtension,
     ) {
-        project.afterEvaluate {
-            if (!extension.enabled.get()) return@afterEvaluate
-            android.applicationVariants.forEach { variant ->
-                if (!shouldRegister(extension, variant.buildType.name)) return@forEach
-                if (variant.buildType.isMinifyEnabled) return@forEach
-                val settings = extension.resolveVariantSettings(variant.name)
-                val needsMinify = settings.componentRenameEnabled ||
-                    settings.viewRenameEnabled ||
-                    settings.bundleResourceObfuscateEnabled ||
-                    settings.obfuscateApk
-                if (!needsMinify) return@forEach
-                val message =
-                    "molt: variant '${variant.name}' has minifyEnabled=false but post-R8 features are enabled " +
-                        "(componentRename=${settings.componentRenameEnabled}, " +
-                        "viewRename=${settings.viewRenameEnabled}, " +
-                        "bundleResourceObfuscate=${settings.bundleResourceObfuscateEnabled}, " +
-                        "obfuscateApk=${settings.obfuscateApk}). " +
-                        "Enable R8 on release or disable rename/arsc for this variant."
-                if (extension.failOnReleaseMinifyDisabled.get()) {
-                    error(message)
-                } else {
-                    project.logger.warn(message)
-                }
+        androidComponents.onVariants { variant ->
+            if (!extension.enabled.get()) return@onVariants
+            val buildTypeName = variant.buildType.orEmpty()
+            if (!shouldRegister(extension, buildTypeName)) return@onVariants
+            val minifyEnabled =
+                android.buildTypes.findByName(buildTypeName)?.isMinifyEnabled ?: false
+            if (minifyEnabled) return@onVariants
+            val settings = extension.resolveVariantSettings(variant.name)
+            val needsMinify = settings.componentRenameEnabled ||
+                settings.viewRenameEnabled ||
+                settings.bundleResourceObfuscateEnabled ||
+                settings.obfuscateApk
+            if (!needsMinify) return@onVariants
+            val message =
+                "molt: variant '${variant.name}' has minifyEnabled=false but post-R8 features are enabled " +
+                    "(componentRename=${settings.componentRenameEnabled}, " +
+                    "viewRename=${settings.viewRenameEnabled}, " +
+                    "bundleResourceObfuscate=${settings.bundleResourceObfuscateEnabled}, " +
+                    "obfuscateApk=${settings.obfuscateApk}). " +
+                    "Enable R8 on release or disable rename/arsc for this variant."
+            if (extension.failOnReleaseMinifyDisabled.get()) {
+                error(message)
+            } else {
+                project.logger.warn(message)
             }
         }
     }
@@ -213,14 +232,20 @@ class MoltObfuscatePlugin : Plugin<Project> {
     private fun wireShrinkKeepValidation(
         project: Project,
         extension: MoltObfuscateExtension,
-        android: AppExtension,
+        androidComponents: ApplicationAndroidComponentsExtension,
     ) {
+        // 在 onVariants 捕获 variant 列表，afterEvaluate 再校验任务存在性
+        // （旧 AppExtension.applicationVariants 在 AGP 9 已移除）。
+        val variants = mutableListOf<Pair<String, String>>()
+        androidComponents.onVariants { variant ->
+            variants += variant.name to variant.buildType.orEmpty()
+        }
         project.afterEvaluate {
             if (!extension.enabled.get() || !extension.mergeShrinkKeepXml.get()) return@afterEvaluate
             if (!extension.failOnMissingShrinkKeepTask.get()) return@afterEvaluate
-            android.applicationVariants.forEach { variant ->
-                if (!shouldRegister(extension, variant.buildType.name)) return@forEach
-                val capitalized = variantCapitalizedName(variant.name)
+            variants.forEach { (variantName, buildTypeName) ->
+                if (!shouldRegister(extension, buildTypeName)) return@forEach
+                val capitalized = variantCapitalizedName(variantName)
                 val taskName = extension.shrinkKeepGenerateTaskName.get()
                     .replace("{Variant}", capitalized)
                 check(taskName in project.tasks.names) {
@@ -233,7 +258,7 @@ class MoltObfuscatePlugin : Plugin<Project> {
 
     private fun wireJunkProguardKeep(
         project: Project,
-        android: AppExtension,
+        android: ApplicationExtension,
         extension: MoltObfuscateExtension,
     ) {
         val keepTask = project.tasks.register<MoltObfuscateGenerateJunkKeepTask>(
@@ -256,7 +281,7 @@ class MoltObfuscatePlugin : Plugin<Project> {
         }
     }
 
-    private fun applicationIdProvider(project: Project, android: AppExtension) = project.provider {
+    private fun applicationIdProvider(project: Project, android: ApplicationExtension) = project.provider {
         android.defaultConfig.applicationId?.takeIf { it.isNotBlank() } ?: "com.example.app"
     }
 }

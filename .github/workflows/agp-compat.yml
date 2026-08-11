@@ -81,7 +81,7 @@ jobs:
             gradle: "8.13"
             required: "1"
           - agp: "9.0.0"
-            gradle: "9.1"
+            gradle: "9.1.0"
             required: "0"
           - agp: "9.1.1"
             gradle: "9.3.1"
@@ -90,7 +90,7 @@ jobs:
             gradle: "9.4.1"
             required: "0"
           - agp: "9.3.0"
-            gradle: "9.5"
+            gradle: "9.5.0"
             required: "0"
     steps:
       - uses: actions/checkout@v4

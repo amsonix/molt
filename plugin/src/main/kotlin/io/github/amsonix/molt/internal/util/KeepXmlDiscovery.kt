@@ -1,7 +1,6 @@
 package io.github.amsonix.molt.internal.util
 
-import com.android.build.gradle.AppExtension
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.CommonExtension
 import org.gradle.api.Project
 import java.io.File
 
@@ -16,17 +15,19 @@ internal object KeepXmlDiscovery {
             .filter { it.isFile }
             .distinctBy { it.absoluteFile.normalize() }
 
-    fun discoverInAndroidProject(android: BaseExtension?): List<File> {
+    // AGP 8/9 的 app 与 library 扩展都实现新 DSL CommonExtension
+    // （AGP 9 移除了旧 com.android.build.gradle.AppExtension / BaseExtension 注册）。
+    fun discoverInAndroidProject(android: CommonExtension<*, *, *, *, *, *>?): List<File> {
         if (android == null) return emptyList()
-        return keepXmlFilesInResDirs(android.sourceSets.flatMap { it.res.srcDirs })
+        return keepXmlFilesInResDirs(android.sourceSets.flatMap { it.res.directories.map(::File) })
     }
 
     fun discoverInProject(project: Project): List<File> =
-        discoverInAndroidProject(project.extensions.findByType(BaseExtension::class.java))
+        discoverInAndroidProject(project.extensions.findByType(CommonExtension::class.java))
 
     fun discoverForVariant(appProject: Project, variantName: String): List<File> {
         val result = linkedSetOf<File>()
-        val appAndroid = appProject.extensions.findByType(AppExtension::class.java)
+        val appAndroid = appProject.extensions.findByType(CommonExtension::class.java)
         discoverInAndroidProject(appAndroid).forEach { result.add(it) }
         AppLibraryDependencyGraph.resolveLibraryProjects(appProject, listOf(variantName))
             .forEach { library -> discoverInProject(library).forEach { result.add(it) } }

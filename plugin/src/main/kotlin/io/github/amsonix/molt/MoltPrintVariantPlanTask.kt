@@ -1,13 +1,18 @@
 package io.github.amsonix.molt
 
-import com.android.build.gradle.AppExtension
 import io.github.amsonix.molt.internal.util.variantCapitalizedName
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 
 /** 配置期诊断：打印各 variant 的 molt 开关与将注册的任务名。 */
 abstract class MoltPrintVariantPlanTask : DefaultTask() {
+
+    /** 配置期由插件经 onVariants 填充（AGP 9 移除了旧 applicationVariants，执行期无法访问 variant API）。 */
+    @get:Internal
+    abstract val variantPlans: ListProperty<MoltVariantPlanEntry>
 
     init {
         group = "molt"
@@ -16,9 +21,9 @@ abstract class MoltPrintVariantPlanTask : DefaultTask() {
 
     @TaskAction
     fun printPlan() {
-        val android = project.extensions.findByType(AppExtension::class.java)
-        if (android == null) {
-            logger.lifecycle("molt: Android application plugin not applied")
+        val entries = variantPlans.getOrElse(emptyList())
+        if (entries.isEmpty()) {
+            logger.lifecycle("molt: Android application plugin not applied or no variants")
             return
         }
         val extension = project.moltExtension()
@@ -30,14 +35,19 @@ abstract class MoltPrintVariantPlanTask : DefaultTask() {
         logger.lifecycle("molt variant plan for ${project.path}")
         logger.lifecycle("  enabledBuildTypes: $enabledBuildTypes")
         logger.lifecycle("  outputRoot: ${extension.outputRoot.get().asFile}")
-        android.applicationVariants.forEach { variant ->
-            val buildType = variant.buildType.name
-            if (!enabledBuildTypes.contains(buildType)) {
+        entries.forEach { entry ->
+            if (!enabledBuildTypes.contains(entry.buildType)) {
                 logger.lifecycle("")
-                logger.lifecycle("  [skip] ${variant.name} (buildType=$buildType not in enabledBuildTypes)")
+                logger.lifecycle("  [skip] ${entry.variantName} (buildType=${entry.buildType} not in enabledBuildTypes)")
                 return@forEach
             }
-            printVariant(project, extension, variant.name, variant.applicationId, variant.buildType.isMinifyEnabled)
+            printVariant(
+                project,
+                extension,
+                entry.variantName,
+                entry.applicationId,
+                entry.minifyEnabled,
+            )
         }
     }
 
@@ -88,3 +98,11 @@ abstract class MoltPrintVariantPlanTask : DefaultTask() {
         logger.lifecycle("      - ${outputRoot.file("$variantName/bundle-resource/resources-mapping.txt").asFile}")
     }
 }
+
+/** 配置期捕获的 variant 快照（新 variant API 无法在执行期访问）。 */
+data class MoltVariantPlanEntry(
+    val variantName: String,
+    val applicationId: String,
+    val buildType: String,
+    val minifyEnabled: Boolean,
+)

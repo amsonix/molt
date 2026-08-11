@@ -35,9 +35,9 @@ F20-assets-encrypt-aab assets-encrypt  aab          8.13.2  8.13  nightly    0
 F21-dex-perturb       dex-perturb      apk          8.13.2  8.13  nightly    0
 
 # --- cross-agp (9.3.0 bookend; gate = AGP 9 兼容性纳入 PR 回归) ---
-F00-baseline          default         all          9.3.0   9.5   gate       1
-F05-arsc-apk          default         apk          9.3.0   9.5   gate       1
-F09-rename-apk        rename-full     apk-rename   9.3.0   9.5   gate       1
+F00-baseline          default         all          9.3.0   9.5.0 gate       1
+F05-arsc-apk          default         apk          9.3.0   9.5.0 gate       1
+F09-rename-apk        rename-full     apk-rename   9.3.0   9.5.0 gate       1
 
 # --- weekly (real project smoke; skip when sample/integration root missing) ---
 F98-integration       default         integration  8.13.2  8.13  weekly     0
