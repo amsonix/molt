@@ -97,8 +97,10 @@ internal object ZipPostR8RenameProcessor {
         val encryptedAssetPaths: Set<String> = assetsEncrypt?.let { assetsConfig ->
             val zipIn = java.util.zip.ZipFile(input)
             try {
+                // APK 为 assets/，AAB 为 base/assets/——按 zip 结构自适应。
+                val assetsPrefix = if (zipIn.getEntry("base/") != null) "base/assets/" else "assets/"
                 io.github.amsonix.molt.internal.bundle.ZipAssetEncryptor
-                    .computeEncryptedPaths(zipIn, assetsConfig, "assets/")
+                    .computeEncryptedPaths(zipIn, assetsConfig, assetsPrefix)
             } finally {
                 zipIn.close()
             }

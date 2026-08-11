@@ -27,6 +27,7 @@ object FeatureProbeProfiles {
             "rename-full" -> applyRenameFull(root)
             "string-fog-assets" -> applyStringFogAssets(root)
             "assets-encrypt" -> applyAssetsEncrypt(root)
+            "dex-perturb" -> applyDexPerturb(root)
             else -> error("Unknown feature probe preset: $preset")
         }
     }
@@ -296,6 +297,21 @@ object FeatureProbeProfiles {
         )
         // read() 必须存活：调用点改写才有目标。
         File(root, "app/proguard-rules.pro").appendText("\n-keep class fixture.app.MainActivity { *; }\n")
+    }
+
+    /** dexPerturb 单独启用（不依赖 stringEncrypt）：验证 nop 注入 + dex 有效性。 */
+    private fun applyDexPerturb(root: File) {
+        appendMoltBlock(
+            root,
+            """
+            stringEncrypt.enabled.set(false)
+            dexPerturb.enabled.set(true)
+            dexPerturb.intensity.set("medium")
+            bundleResourceObfuscate.enabled.set(true)
+            bundleResourceObfuscate.obfuscateApk.set(true)
+            allowUnsignedOutput.set(true)
+            """.trimIndent(),
+        )
     }
 
     private fun writeMinimalPng(root: File, relativePath: String) {
