@@ -112,6 +112,18 @@ public final class DexInPlaceRenameEngine {
             DexPerturbationConfig dexPerturb,
             AssetsEncryptConfig assetsEncrypt
     ) throws IOException {
+        return remapBytes(input, mapping, rewritePlan, stringConfig, dexPerturb, assetsEncrypt, null);
+    }
+
+    public static byte[] remapBytes(
+            byte[] input,
+            RenameMapping mapping,
+            DexRewritePlan rewritePlan,
+            DexStringEncryptionConfig stringConfig,
+            DexPerturbationConfig dexPerturb,
+            AssetsEncryptConfig assetsEncrypt,
+            java.util.Set<String> encryptedAssetPaths
+    ) throws IOException {
         boolean needsRename = !mapping.entries().isEmpty();
         boolean needsEncrypt = stringConfig != null;
         boolean needsPerturb = dexPerturb != null;
@@ -133,7 +145,8 @@ public final class DexInPlaceRenameEngine {
                 plan.getPublicClassDescriptors(),
                 stringConfig,
                 dexPerturb,
-                assetsEncrypt
+                assetsEncrypt,
+                encryptedAssetPaths
         );
     }
 

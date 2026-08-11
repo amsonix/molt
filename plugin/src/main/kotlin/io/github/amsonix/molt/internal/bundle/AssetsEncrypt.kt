@@ -242,11 +242,11 @@ internal object DexAssetEncryptor {
         return false
     }
 
-    fun rewriteClass(classDef: ClassDef, config: AssetsEncryptConfig): ClassDef {
+    fun rewriteClass(classDef: ClassDef, config: AssetsEncryptConfig, encryptedPaths: Set<String>): ClassDef {
         // FogAssets 内部的 getAssets().open() 是解密实现，不得改写（否则自递归）。
         if (classDef.type == config.fogAssetsDescriptor) return classDef
-        val direct = classDef.directMethods.map { rewriteMethod(it, config) }
-        val virtual = classDef.virtualMethods.map { rewriteMethod(it, config) }
+        val direct = classDef.directMethods.map { rewriteMethod(it, config, encryptedPaths) }
+        val virtual = classDef.virtualMethods.map { rewriteMethod(it, config, encryptedPaths) }
         return ImmutableClassDef(
             classDef.type,
             classDef.accessFlags,
@@ -261,7 +261,7 @@ internal object DexAssetEncryptor {
         )
     }
 
-    private fun rewriteMethod(method: Method, config: AssetsEncryptConfig): Method {
+    private fun rewriteMethod(method: Method, config: AssetsEncryptConfig, encryptedPaths: Set<String>): Method {
         val implementation = method.implementation ?: return method
         val mmi = MutableMethodImplementation(implementation)
         val instructions = mmi.instructions
@@ -271,6 +271,20 @@ internal object DexAssetEncryptor {
             val argCount = assetManagerOpenCall(instruction) ?: continue
             // 仅当清单非空时改写（清单为空 = 功能关闭但类仍注入）。
             if (config.filePatterns.isEmpty()) continue
+            // 只改写"实际被加密"的文件调用点：清单外文件（如 .svga）保持 AssetManager.open
+            // 原样，否则 FogAssets 会对明文文件执行 XOR 输出乱码（playlet SVGA 不显示崩溃链）。
+            val pathRegister = when (instruction) {
+                is org.jf.dexlib2.iface.instruction.FiveRegisterInstruction -> instruction.registerD
+                is org.jf.dexlib2.iface.instruction.RegisterRangeInstruction -> instruction.startRegister + 1
+                else -> null
+            }
+            if (pathRegister == null) continue
+            val previous = if (index > 0) instructions[index - 1] else null
+            if (previous !is org.jf.dexlib2.iface.instruction.OneRegisterInstruction) continue
+            if (previous !is org.jf.dexlib2.iface.instruction.ReferenceInstruction) continue
+            val stringRef = previous.reference as? org.jf.dexlib2.iface.reference.StringReference ?: continue
+            if (previous.registerA != pathRegister) continue
+            if (stringRef.string !in encryptedPaths) continue
             // 参数寄存器：invoke-virtual {AssetManager, p0, p1...}——p0 是第二个寄存器。
             val firstArgRegister = when (instruction) {
                 is org.jf.dexlib2.iface.instruction.FiveRegisterInstruction -> instruction.registerD
@@ -378,6 +392,35 @@ internal object ZipAssetEncryptor {
 
     private fun isAaptNoCompressAsset(path: String): Boolean =
         AAPT2_NO_COMPRESS_EXTENSIONS.any { path.endsWith(it, ignoreCase = true) }
+
+    /**
+     * 预计算"实际会被加密"的文件路径集合（相对 assets）。
+     * 与 [patchZipInPlace] 的加密决策完全一致（媒体意图层 > openFd 排除 > open 常量调用点）——
+     * dex 调用点改写按此集合过滤，保证"改写"与"加密"覆盖一致：
+     * 清单外文件（如 .svga）调用点保持 AssetManager.open 原样，FogAssets 不会对其 XOR。
+     */
+    fun computeEncryptedPaths(
+        zipIn: java.util.zip.ZipFile,
+        config: AssetsEncryptConfig,
+        assetsPrefix: String,
+    ): Set<String> {
+        if (config.filePatterns.isEmpty()) return emptySet()
+        val openReferenced = scanReferencedAssets(zipIn) {
+            DexAssetEncryptor.scanOpenReferencedPaths(it, config.fogAssetsDescriptor)
+        }
+        val fdReferenced = scanReferencedAssets(zipIn) { DexAssetEncryptor.scanFdReferencedPaths(it) }
+        val encrypted = mutableSetOf<String>()
+        zipIn.entries().asSequence().forEach { entry ->
+            if (entry.isDirectory || !entry.name.startsWith(assetsPrefix)) return@forEach
+            val relative = entry.name.removePrefix(assetsPrefix)
+            if (!matches(entry.name, config.filePatterns)) return@forEach
+            if (isAaptNoCompressAsset(relative)) return@forEach
+            if (relative in fdReferenced) return@forEach
+            if (relative in openReferenced) encrypted.add(relative)
+        }
+        return encrypted
+    }
+
 
     /** patch 结果统计：加密数、openFd 引用排除数、媒体扩展名排除数、清单内无常量 open 调用点跳过数。 */
     data class Result(

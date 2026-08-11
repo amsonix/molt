@@ -46,6 +46,11 @@ class AssetsEncryptTest {
     @Test
     fun assetManagerOpen_callIsRewrittenToFogAssets() {
         val owner = "Lcom/example/app/Main;"
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("secret.cfg"),
+        )
         val call = ImmutableInstruction35c(
             Opcode.INVOKE_VIRTUAL,
             2,
@@ -81,7 +86,7 @@ class AssetsEncryptTest {
                     emptySet(),
                     ImmutableMethodImplementation(
                         2,
-                        listOf(call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        listOf(constString, call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
                         emptyList(),
                         emptyList(),
                     ),
@@ -90,14 +95,14 @@ class AssetsEncryptTest {
             emptyList(),
         )
         val input = buildDex(clazz)
-        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config, setOf("secret.cfg"))
         val rebuilt = buildDex(output)
         val parsed = openDex(rebuilt)
 
         val method = parsed.classes.first().directMethods.first()
-        val instruction = method.implementation!!.instructions.first()
-        assertTrue("must be a reference instruction", instruction is ReferenceInstruction)
-        val ref = (instruction as ReferenceInstruction).reference as MethodReference
+        val instruction = method.implementation!!.instructions
+            .filterIsInstance<ReferenceInstruction>().last()
+        val ref = instruction.reference as MethodReference
         assertEquals("must call FogAssets.open", "Lcom/example/app/shell/fogassets/FogAssets;", ref.definingClass)
         assertEquals("method name must be open", "open", ref.name)
     }
@@ -105,6 +110,11 @@ class AssetsEncryptTest {
     @Test
     fun remapBytes_assetsEncryptOnly_rewritesCallSites() {
         val owner = "Lcom/example/app/Main;"
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("secret.cfg"),
+        )
         val call = ImmutableInstruction35c(
             Opcode.INVOKE_VIRTUAL,
             2,
@@ -140,7 +150,7 @@ class AssetsEncryptTest {
                     emptySet(),
                     ImmutableMethodImplementation(
                         2,
-                        listOf(call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        listOf(constString, call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
                         emptyList(),
                         emptyList(),
                     ),
@@ -150,19 +160,25 @@ class AssetsEncryptTest {
         )
         val input = buildDex(clazz)
         val emptyMapping = io.github.amsonix.molt.internal.rename.RenameMapping.fromForward(emptyMap())
-        val output = DexInPlaceRenameEngine.remapBytes(input, emptyMapping, null, null, null, config)
+        val output = DexInPlaceRenameEngine.remapBytes(input, emptyMapping, null, null, null, config, setOf("secret.cfg"))
         assertFalse("assets-only dex must still be rewritten", output.contentEquals(input))
 
         val parsed = openDex(output)
         val method = parsed.classes.first().directMethods.first()
-        val instruction = method.implementation!!.instructions.first()
-        val ref = (instruction as ReferenceInstruction).reference as MethodReference
+        val instruction = method.implementation!!.instructions
+            .filterIsInstance<ReferenceInstruction>().last()
+        val ref = instruction.reference as MethodReference
         assertEquals("must call FogAssets.open", "Lcom/example/app/shell/fogassets/FogAssets;", ref.definingClass)
     }
 
     @Test
     fun twoArgOpen_callIsRewrittenToFogAssetsTwoArgOverload() {
         val owner = "Lcom/example/app/Main;"
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            1,
+            ImmutableStringReference("secret.cfg"),
+        )
         val call = ImmutableInstruction35c(
             Opcode.INVOKE_VIRTUAL,
             3,
@@ -198,7 +214,7 @@ class AssetsEncryptTest {
                     emptySet(),
                     ImmutableMethodImplementation(
                         3,
-                        listOf(call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        listOf(constString, call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
                         emptyList(),
                         emptyList(),
                     ),
@@ -207,22 +223,29 @@ class AssetsEncryptTest {
             emptyList(),
         )
         val input = buildDex(clazz)
-        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config, setOf("secret.cfg"))
         val rebuilt = buildDex(output)
         val parsed = openDex(rebuilt)
 
         val method = parsed.classes.first().directMethods.first()
-        val instruction = method.implementation!!.instructions.first() as ReferenceInstruction
+        val instruction = method.implementation!!.instructions
+            .filterIsInstance<ReferenceInstruction>().last()
         val ref = instruction.reference as MethodReference
         assertEquals("must call FogAssets.open", "Lcom/example/app/shell/fogassets/FogAssets;", ref.definingClass)
         assertEquals("must be 2-arg overload", listOf("Ljava/lang/String;", "I"), ref.parameterTypes)
-        val opcode = method.implementation!!.instructions.first().opcode
+        val opcode = method.implementation!!.instructions
+            .filterIsInstance<ReferenceInstruction>().last().opcode
         assertTrue("must be invoke-static", opcode == Opcode.INVOKE_STATIC)
     }
 
     @Test
     fun twoArgOpen_rangeForm_isRewritten() {
         val owner = "Lcom/example/app/Main;"
+        val constString = ImmutableInstruction21c(
+            Opcode.CONST_STRING,
+            21,
+            ImmutableStringReference("secret.cfg"),
+        )
         val call = ImmutableInstruction3rc(
             Opcode.INVOKE_VIRTUAL_RANGE,
             20,
@@ -254,7 +277,7 @@ class AssetsEncryptTest {
                     emptySet(),
                     ImmutableMethodImplementation(
                         24,
-                        listOf(call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
+                        listOf(constString, call, ImmutableInstruction11x(Opcode.RETURN_OBJECT, 0)),
                         emptyList(),
                         emptyList(),
                     ),
@@ -263,16 +286,18 @@ class AssetsEncryptTest {
             emptyList(),
         )
         val input = buildDex(clazz)
-        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config, setOf("secret.cfg"))
         val rebuilt = buildDex(output)
         val parsed = openDex(rebuilt)
 
         val method = parsed.classes.first().directMethods.first()
-        val instruction = method.implementation!!.instructions.first() as ReferenceInstruction
+        val instruction = method.implementation!!.instructions
+            .filterIsInstance<ReferenceInstruction>().last()
         val ref = instruction.reference as MethodReference
         assertEquals("must call FogAssets.open", "Lcom/example/app/shell/fogassets/FogAssets;", ref.definingClass)
         assertEquals("must be 2-arg overload", listOf("Ljava/lang/String;", "I"), ref.parameterTypes)
-        val opcode = method.implementation!!.instructions.first().opcode
+        val opcode = method.implementation!!.instructions
+            .filterIsInstance<ReferenceInstruction>().last().opcode
         assertTrue("must be invoke-static/range", opcode == Opcode.INVOKE_STATIC_RANGE)
     }
 
@@ -324,12 +349,13 @@ class AssetsEncryptTest {
             emptyList(),
         )
         val input = buildDex(clazz)
-        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config, setOf("secret.cfg"))
         val rebuilt = buildDex(output)
         val parsed = openDex(rebuilt)
 
         val method = parsed.classes.first().directMethods.first()
-        val instruction = method.implementation!!.instructions.first() as ReferenceInstruction
+        val instruction = method.implementation!!.instructions
+            .filterIsInstance<ReferenceInstruction>().last()
         val ref = instruction.reference as MethodReference
         assertEquals(
             "FogAssets 自身调用必须保持 AssetManager.open（否则自递归）",

@@ -68,6 +68,18 @@ final class DexBinaryPatchWriter {
             DexPerturbationConfig dexPerturb,
             AssetsEncryptConfig assetsEncrypt
     ) throws IOException {
+        return patch(input, mapping, publicClassDescriptors, stringConfig, dexPerturb, assetsEncrypt, null);
+    }
+
+    static byte[] patch(
+            byte[] input,
+            RenameMapping mapping,
+            Set<String> publicClassDescriptors,
+            DexStringEncryptionConfig stringConfig,
+            DexPerturbationConfig dexPerturb,
+            AssetsEncryptConfig assetsEncrypt,
+            Set<String> encryptedAssetPaths
+    ) throws IOException {
         if (mapping.entries().isEmpty()
                 && publicClassDescriptors.isEmpty()
                 && stringConfig == null
@@ -109,7 +121,13 @@ final class DexBinaryPatchWriter {
                 rewritten = DexStringEncryptor.INSTANCE.rewriteClassStrings(rewritten, stringConfig);
             }
             if (assetsEncrypt != null) {
-                rewritten = DexAssetEncryptor.INSTANCE.rewriteClass(rewritten, assetsEncrypt);
+                rewritten = DexAssetEncryptor.INSTANCE.rewriteClass(
+                        rewritten,
+                        assetsEncrypt,
+                        encryptedAssetPaths != null
+                                ? encryptedAssetPaths
+                                : java.util.Collections.emptySet()
+                );
             }
             pool.internClass(rewritten);
         }
