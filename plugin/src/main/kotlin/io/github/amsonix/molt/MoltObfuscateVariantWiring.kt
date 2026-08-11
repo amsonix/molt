@@ -156,6 +156,10 @@ internal object MoltObfuscateVariantWiring {
             ) {
                 this.seed.set(seed)
                 applicationId.set(variantApplicationId)
+                filePatterns.set(extension.assetsEncrypt.filePatterns)
+                mediaExtensions.set(
+                    io.github.amsonix.molt.internal.bundle.ZipAssetEncryptor.AAPT_NO_COMPRESS_EXTENSIONS.toList(),
+                )
                 outputDirectory.set(
                     project.layout.buildDirectory.dir("generated/shell-obfuscate/$variantName/fogassets"),
                 )

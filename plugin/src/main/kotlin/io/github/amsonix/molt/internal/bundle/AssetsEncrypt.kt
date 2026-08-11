@@ -62,24 +62,48 @@ internal object FogAssetsSource {
         "L${fogAssetsPackagePrefix(applicationId).replace('.', '/')}/${fogAssetsClassName(seed)};"
 
     /** 返回 (FogAssets.java, FogAssetsInitializer.java) 两个 public 类源码。 */
-    fun buildSource(applicationId: String, seed: Int): Pair<String, String> {
+    fun buildSource(
+        applicationId: String,
+        seed: Int,
+        filePatterns: List<String>,
+        mediaExtensions: Set<String>,
+    ): Pair<String, String> {
         val pkg = fogAssetsPackagePrefix(applicationId)
         val className = fogAssetsClassName(seed)
         val initializerName = fogAssetsInitializerClassName(seed)
+        // filePatterns 编译为 Java 正则（匹配相对 assets 的路径），与构建期加密决策同一判定。
+        val globRegex = filePatterns.joinToString("|") {
+            globToJavaRegex(it).replace("\\", "\\\\")
+        }
+        val mediaList = mediaExtensions.sorted().joinToString(", ") { "\"$it\"" }
         val fogAssets = """
             package $pkg;
 
             public final class $className {
                 private static final int SEED = $seed;
+                private static final String[] NO_COMPRESS_EXTENSIONS = {$mediaList};
+                private static final java.util.regex.Pattern ENCRYPT_PATTERN =
+                    java.util.regex.Pattern.compile("$globRegex");
                 private static android.content.Context context;
 
                 public static void init(android.content.Context c) {
                     context = c.getApplicationContext();
                 }
 
+                private static boolean isEncrypted(String path) {
+                    if (path == null) return false;
+                    for (String ext : NO_COMPRESS_EXTENSIONS) {
+                        if (path.endsWith(ext)) return false;
+                    }
+                    return ENCRYPT_PATTERN.matcher(path).matches();
+                }
+
                 public static java.io.InputStream open(String path) throws java.io.IOException {
                     if (context == null) {
                         throw new IllegalStateException("FogAssets not initialized");
+                    }
+                    if (!isEncrypted(path)) {
+                        return context.getAssets().open(path);
                     }
                     java.io.InputStream raw = context.getAssets().open(path);
                     java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
@@ -269,11 +293,11 @@ internal object DexAssetEncryptor {
         return false
     }
 
-    fun rewriteClass(classDef: ClassDef, config: AssetsEncryptConfig, encryptedPaths: Set<String>): ClassDef {
+    fun rewriteClass(classDef: ClassDef, config: AssetsEncryptConfig): ClassDef {
         // FogAssets 内部的 getAssets().open() 是解密实现，不得改写（否则自递归）。
         if (classDef.type == config.fogAssetsDescriptor) return classDef
-        val direct = classDef.directMethods.map { rewriteMethod(it, config, encryptedPaths) }
-        val virtual = classDef.virtualMethods.map { rewriteMethod(it, config, encryptedPaths) }
+        val direct = classDef.directMethods.map { rewriteMethod(it, config) }
+        val virtual = classDef.virtualMethods.map { rewriteMethod(it, config) }
         return ImmutableClassDef(
             classDef.type,
             classDef.accessFlags,
@@ -288,7 +312,7 @@ internal object DexAssetEncryptor {
         )
     }
 
-    private fun rewriteMethod(method: Method, config: AssetsEncryptConfig, encryptedPaths: Set<String>): Method {
+    private fun rewriteMethod(method: Method, config: AssetsEncryptConfig): Method {
         val implementation = method.implementation ?: return method
         val mmi = MutableMethodImplementation(implementation)
         val instructions = mmi.instructions
@@ -298,16 +322,8 @@ internal object DexAssetEncryptor {
             val argCount = assetManagerOpenCall(instruction) ?: continue
             // 仅当清单非空时改写（清单为空 = 功能关闭但类仍注入）。
             if (config.filePatterns.isEmpty()) continue
-            // 只改写"实际被加密"的文件调用点：清单外文件（如 .svga）保持 AssetManager.open
-            // 原样，否则 FogAssets 会对明文文件执行 XOR 输出乱码（playlet SVGA 不显示崩溃链）。
-            val pathRegister = when (instruction) {
-                is org.jf.dexlib2.iface.instruction.FiveRegisterInstruction -> instruction.registerD
-                is org.jf.dexlib2.iface.instruction.RegisterRangeInstruction -> instruction.startRegister + 1
-                else -> null
-            }
-            if (pathRegister == null) continue
-            val path = findConstStringBefore(instructions, index, pathRegister) ?: continue
-            if (path !in encryptedPaths) continue
+            // 所有 AssetManager.open 调用点统一改写（含动态参数调用点）——FogAssets 运行时
+            // 判定"path 在加密清单则解密，否则透传"，清单外文件（.svga 等）行为不变。
             // 参数寄存器：invoke-virtual {AssetManager, p0, p1...}——p0 是第二个寄存器。
             val firstArgRegister = when (instruction) {
                 is org.jf.dexlib2.iface.instruction.FiveRegisterInstruction -> instruction.registerD
@@ -405,7 +421,7 @@ internal object ZipAssetEncryptor {
      * 实证（本地 aapt2 二进制 strings 提取）：AGP 8.0 起含 .webp；
      * AGP 8.13（aapt2 2.20）起新增 .ttf/.otf/.ttc（字体 no-compress，openFd/mmap 加载字体的常用路径）。
      */
-    private val AAPT2_NO_COMPRESS_EXTENSIONS = setOf(
+    val AAPT_NO_COMPRESS_EXTENSIONS = setOf(
         ".jpg", ".jpeg", ".png", ".gif", ".webp", ".wav", ".mp2", ".mp3", ".ogg",
         ".aac", ".mpg", ".mpeg", ".mid", ".midi", ".smf", ".jet", ".rtttl",
         ".imy", ".xmf", ".mp4", ".m4a", ".m4v", ".3gp", ".3gpp", ".3g2",
@@ -414,43 +430,13 @@ internal object ZipAssetEncryptor {
     )
 
     private fun isAaptNoCompressAsset(path: String): Boolean =
-        AAPT2_NO_COMPRESS_EXTENSIONS.any { path.endsWith(it, ignoreCase = true) }
-
-    /**
-     * 预计算"实际会被加密"的文件路径集合（相对 assets）。
-     * 与 [patchZipInPlace] 的加密决策完全一致（媒体意图层 > openFd 排除 > open 常量调用点）——
-     * dex 调用点改写按此集合过滤，保证"改写"与"加密"覆盖一致：
-     * 清单外文件（如 .svga）调用点保持 AssetManager.open 原样，FogAssets 不会对其 XOR。
-     */
-    fun computeEncryptedPaths(
-        zipIn: java.util.zip.ZipFile,
-        config: AssetsEncryptConfig,
-        assetsPrefix: String,
-    ): Set<String> {
-        if (config.filePatterns.isEmpty()) return emptySet()
-        val openReferenced = scanReferencedAssets(zipIn) {
-            DexAssetEncryptor.scanOpenReferencedPaths(it, config.fogAssetsDescriptor)
-        }
-        val fdReferenced = scanReferencedAssets(zipIn) { DexAssetEncryptor.scanFdReferencedPaths(it) }
-        val encrypted = mutableSetOf<String>()
-        zipIn.entries().asSequence().forEach { entry ->
-            if (entry.isDirectory || !entry.name.startsWith(assetsPrefix)) return@forEach
-            val relative = entry.name.removePrefix(assetsPrefix)
-            if (!matches(entry.name, config.filePatterns)) return@forEach
-            if (isAaptNoCompressAsset(relative)) return@forEach
-            if (relative in fdReferenced) return@forEach
-            if (relative in openReferenced) encrypted.add(relative)
-        }
-        return encrypted
-    }
+        AAPT_NO_COMPRESS_EXTENSIONS.any { path.endsWith(it, ignoreCase = true) }
 
 
     /** patch 结果统计：加密数、openFd 引用排除数、媒体扩展名排除数、清单内无常量 open 调用点跳过数。 */
     data class Result(
         val encrypted: Int,
-        val fdExcluded: Int,
         val mediaSkipped: Int,
-        val noCallSite: Int,
         private val extraWarnings: List<String> = emptyList(),
     ) {
         /** 构建期告警（调用方经 Gradle logger 输出——java.util.logging 在 Gradle 不可见）。 */
@@ -461,42 +447,22 @@ internal object ZipAssetEncryptor {
                         "(jpg/png/mp4/mp3/ttf/...) and were kept plaintext — media must stay decodable",
                 )
             }
-            if (fdExcluded > 0) {
-                add(
-                    "molt: ${fdExcluded} asset(s) referenced by AssetManager.openFd/openNonAssetFd " +
-                        "were kept plaintext (fd reads bypass the FogAssets rewrite)",
-                )
-            }
-            if (noCallSite > 0) {
-                add(
-                    "molt: ${noCallSite} manifest asset(s) have no constant AssetManager.open() call site; " +
-                        "kept plaintext (dynamic-path / reflection reads cannot be decrypted)",
-                )
-            }
             addAll(extraWarnings)
         }
     }
 
     fun patchZipInPlace(zipFile: File, config: AssetsEncryptConfig, assetsPrefix: String): Result {
-        if (config.filePatterns.isEmpty()) return Result(0, 0, 0, 0)
+        if (config.filePatterns.isEmpty()) return Result(0, 0)
         val temp = File.createTempFile("molt-assets-encrypt", ".zip", zipFile.parentFile)
         var encrypted = 0
-        var fdExcluded = 0
         var mediaSkipped = 0
-        var noCallSite = 0
         val webViewWarnings = mutableListOf<String>()
         try {
             java.util.zip.ZipFile(zipFile).use { zipIn ->
-                // 加密决策由读取机制决定（不依赖 zip method——AAPT2 对极小文件也 STORED，不可靠）：
-                // 1) 常量 open() 调用点 = 流式读取、可改写 → 加密；
-                // 2) 常量 openFd() 调用点 = native 直读、无改写点 → 保持明文（功能正常优先）；
-                // 3) 无常量调用点 = 动态拼接/反射读取 → 保持明文 + 告警（避免"加密了无人能解"）。
+                // 加密决策 = 清单命中 ∩ 非媒体扩展名（与 FogAssets 运行时判定同一条件）：
+                // 动态/常量 open 调用点统一走 FogAssets.open——运行时"在清单则解密，否则透传"。
                 // 加密条目强制 DEFLATED：native openFileDescriptor 检查 zip method 字段，
                 // DEFLATED 一律抛 IOException——加密文件绝无"密文 fd"状态（免疫兜底）。
-                val openReferenced = scanReferencedAssets(zipIn) {
-                    DexAssetEncryptor.scanOpenReferencedPaths(it, config.fogAssetsDescriptor)
-                }
-                val fdReferenced = scanReferencedAssets(zipIn) { DexAssetEncryptor.scanFdReferencedPaths(it) }
                 java.util.zip.ZipOutputStream(temp.outputStream().buffered()).use { zipOut ->
                     zipIn.entries().asSequence().forEach { entry ->
                         if (entry.isDirectory) {
@@ -515,13 +481,7 @@ internal object ZipAssetEncryptor {
                                     zipOut, zipIn, entry, entry.name,
                                 )
                             }
-                            inAssets && relativePath in fdReferenced && matches(entry.name, config.filePatterns) -> {
-                                fdExcluded++
-                                io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
-                                    zipOut, zipIn, entry, entry.name,
-                                )
-                            }
-                            inAssets && relativePath in openReferenced && matches(entry.name, config.filePatterns) -> {
+                            inAssets && matches(entry.name, config.filePatterns) -> {
                                 val bytes = zipIn.getInputStream(entry).use { it.readBytes() }
                                 warnOnWebViewReferences(entry.name, bytes, webViewWarnings)
                                 // 密钥按相对 assets 的路径派生（与运行时 FogAssets.open(path) 一致）。
@@ -536,12 +496,6 @@ internal object ZipAssetEncryptor {
                                 )
                                 encrypted++
                             }
-                            inAssets && matches(entry.name, config.filePatterns) -> {
-                                noCallSite++
-                                io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
-                                    zipOut, zipIn, entry, entry.name,
-                                )
-                            }
                             else -> {
                                 io.github.amsonix.molt.internal.bundle.ZipEntryWriter.copy(
                                     zipOut, zipIn, entry, entry.name,
@@ -551,13 +505,13 @@ internal object ZipAssetEncryptor {
                     }
                 }
             }
-            if (encrypted > 0 || fdExcluded > 0 || mediaSkipped > 0) {
+            if (encrypted > 0 || mediaSkipped > 0) {
                 temp.copyTo(zipFile, overwrite = true)
             }
         } finally {
             temp.delete()
         }
-        return Result(encrypted, fdExcluded, mediaSkipped, noCallSite, webViewWarnings)
+        return Result(encrypted, mediaSkipped, webViewWarnings)
     }
 
     private fun scanReferencedAssets(
@@ -608,12 +562,14 @@ internal object ZipAssetEncryptor {
         val fileName = path.substringAfterLast('/')
         return patterns.any { pattern ->
             val target = if (pattern.contains('/')) path else fileName
-            val regex = pattern
-                .replace(".", "\\.")
-                .replace("*", ".*")
-                .replace("?", ".")
-            Regex(regex).matches(target)
+            Regex(globToJavaRegex(pattern)).matches(target)
         }
     }
 
 }
+
+/** glob → Java 正则（点转义、* → .*、? → .）。 */
+internal fun globToJavaRegex(pattern: String): String = pattern
+    .replace(".", "\\.")
+    .replace("*", ".*")
+    .replace("?", ".")

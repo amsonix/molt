@@ -142,8 +142,26 @@ jobs:
       - name: Fail if required row incomplete
         if: matrix.required == '1'
         run: |
-          test "${{ steps.smoke.outcome }}" = "success"
-          test "${{ steps.apk.outcome }}" = "success"
-          test "${{ steps.aab.outcome }}" = "success"
-          test "${{ steps.apk_rename.outcome }}" = "success"
-          test "${{ steps.aab_rename.outcome }}" = "success"
+          test "${{ steps.smoke.outcome }}" = "success" || true
+          test "${{ steps.apk.outcome }}" = "success" || true
+          test "${{ steps.aab.outcome }}" = "success" || true
+          test "${{ steps.apk_rename.outcome }}" = "success" || true
+          test "${{ steps.aab_rename.outcome }}" = "success" || true
+          echo "::group::Nested probe test results XML (full failure message)"
+          cat plugin/build/test-results/*/TEST-*.xml 2>/dev/null || true
+          echo "::endgroup::"
+          test "${{ steps.smoke.outcome }}" = "success" &&
+            test "${{ steps.apk.outcome }}" = "success" &&
+            test "${{ steps.aab.outcome }}" = "success" &&
+            test "${{ steps.apk_rename.outcome }}" = "success" &&
+            test "${{ steps.aab_rename.outcome }}" = "success"
+
+      - name: Upload probe test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agp-compat-results-${{ matrix.agp }}
+          path: |
+            plugin/build/test-results/
+            plugin/build/reports/tests/
+          if-no-files-found: ignore

@@ -92,19 +92,6 @@ internal object ZipPostR8RenameProcessor {
         } else {
             null
         }
-        // 预计算实际加密文件集合：调用点改写只覆盖被加密的文件（清单外文件保持原样，
-        // 否则 FogAssets 会对明文执行 XOR 输出乱码，如 .svga 动画损坏）。
-        val encryptedAssetPaths: Set<String> = assetsEncrypt?.let { assetsConfig ->
-            val zipIn = java.util.zip.ZipFile(input)
-            try {
-                // APK 为 assets/，AAB 为 base/assets/——按 zip 结构自适应。
-                val assetsPrefix = if (zipIn.getEntry("base/") != null) "base/assets/" else "assets/"
-                io.github.amsonix.molt.internal.bundle.ZipAssetEncryptor
-                    .computeEncryptedPaths(zipIn, assetsConfig, assetsPrefix)
-            } finally {
-                zipIn.close()
-            }
-        } ?: emptySet()
         val patchedDexEntries = if (dexWorkEnabled && dexRewritePlan != null) {
             dexEntries.mapValues { (_, bytes) ->
                 DexInPlaceRenameEngine.remapBytes(
@@ -114,7 +101,6 @@ internal object ZipPostR8RenameProcessor {
                     stringEncrypt,
                     config.dexPerturb,
                     config.assetsEncrypt,
-                    encryptedAssetPaths,
                 )
             }
         } else {
