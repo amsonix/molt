@@ -136,7 +136,14 @@ run_row() {
         -PtestAgp="$agp" \
         -PtestGradle="$gradle" \
         --no-daemon -q; then
-        echo "PASS"
+        # TestKit skipped（如 runtime 探针无设备）退出码仍为 0——查结果 XML 区分，避免假 PASS。
+        local results_xml
+        results_xml=$(ls plugin/build/test-results/moltObfuscateFeatureProbeTest/TEST-*.xml 2>/dev/null | head -1)
+        if [[ -n "$results_xml" ]] && grep -q 'skipped="[1-9]' "$results_xml" 2>/dev/null; then
+          echo "SKIP"
+        else
+          echo "PASS"
+        fi
       else
         echo "FAIL"
       fi

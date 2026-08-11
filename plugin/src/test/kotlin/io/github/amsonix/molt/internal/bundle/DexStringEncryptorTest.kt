@@ -56,6 +56,20 @@ class DexStringEncryptorTest {
         )
     }
 
+    @Test
+    fun buildFogSource_decryptLoopAlignsToPlaintextIndex() {
+        val key = intArrayOf(0x1234, 0x5678, 0x9ABC, 0xDEF0)
+        val source = DexStringEncryptor.buildFogSource("com.example.app", key, 42)
+        assertTrue(
+            "解密循环位置项必须用明文索引 plainIndex（encrypt 按明文位置派生）",
+            source.contains("plainIndex & 0xFF"),
+        )
+        assertFalse(
+            "不得直接使用密文索引 i 的位置项（i & 0xFF 会错位 4）",
+            Regex("""\^ salt \^ \(i & 0xFF\)""").containsMatchIn(source),
+        )
+    }
+
     /** 镜像 Fog.d：从密文前 4 个 char 取 key，对剩余部分 XOR 还原。 */
     private fun fogDecrypt(cipher: String): String {
         val chars = cipher.toCharArray()

@@ -94,9 +94,12 @@ internal object DexStringEncryptor {
                 int k2 = chars[2] & 0xFF;
                 int k3 = chars[3] & 0xFF;
                 int salt = (chars.length - 4) & 0xFF;
+                // 位置项必须用明文索引 (i - 4)：encrypt 按明文位置派生，
+                // 直接用密文索引 i 会整体错位 4，解密出乱码（playlet 实机崩溃复现）。
                 for (int i = 4; i < chars.length; i++) {
-                    int key = i % 4 == 0 ? k0 : i % 4 == 1 ? k1 : i % 4 == 2 ? k2 : k3;
-                    chars[i] ^= (char) (key ^ salt ^ (i & 0xFF));
+                    int plainIndex = i - 4;
+                    int key = plainIndex % 4 == 0 ? k0 : plainIndex % 4 == 1 ? k1 : plainIndex % 4 == 2 ? k2 : k3;
+                    chars[i] ^= (char) (key ^ salt ^ (plainIndex & 0xFF));
                 }
                 return new String(chars, 4, chars.length - 4);
             }
