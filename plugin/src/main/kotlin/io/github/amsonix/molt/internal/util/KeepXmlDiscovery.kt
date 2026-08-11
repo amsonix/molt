@@ -1,6 +1,7 @@
 package io.github.amsonix.molt.internal.util
 
 import com.android.build.api.dsl.CommonExtension
+import io.github.amsonix.molt.internal.util.SourceSetDirectoriesCompat
 import org.gradle.api.Project
 import java.io.File
 
@@ -19,7 +20,7 @@ internal object KeepXmlDiscovery {
     // （AGP 9 移除了旧 com.android.build.gradle.AppExtension / BaseExtension 注册）。
     fun discoverInAndroidProject(android: CommonExtension<*, *, *, *, *, *>?): List<File> {
         if (android == null) return emptyList()
-        return keepXmlFilesInResDirs(android.sourceSets.flatMap { it.res.directories.map(::File) })
+        return keepXmlFilesInResDirs(android.sourceSets.flatMap { SourceSetDirectoriesCompat.of(it, "getRes") })
     }
 
     fun discoverInProject(project: Project): List<File> =
