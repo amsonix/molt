@@ -25,6 +25,7 @@ object FeatureProbeAssertions {
             "arsc-dir", "arsc-file" -> assertArscMapping(root, row.preset)
             "keep-verify" -> assertKeepVerifyApk(root, agpVersion)
             "assets-encrypt" -> assertAssetsEncrypt(root)
+            "dex-perturb" -> assertDexPerturbApk(root)
             "baseline-sync", "rename-full" -> if (row.featureId == "F13-baseline-sync") {
                 assertBaselineSyncApk(root)
             }
@@ -32,8 +33,9 @@ object FeatureProbeAssertions {
     }
 
     fun assertAfterAab(row: FeatureProbeMatrix.Row, root: File, agpVersion: String) {
-        if (row.preset == "keep-verify") {
-            assertKeepVerifyAab(root, agpVersion)
+        when (row.preset) {
+            "keep-verify" -> assertKeepVerifyAab(root, agpVersion)
+            "assets-encrypt" -> assertAssetsEncryptAab(root)
         }
     }
 
@@ -234,6 +236,37 @@ object FeatureProbeAssertions {
         return false
     }
 
+    /** dexPerturb 探针：dex 中注入的 NOP 数量须远超 R8 基线（light/medium 每方法 1-8 个）。 */
+    private fun assertDexPerturbApk(root: File) {
+        val apk = File(root, "app/build").walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".apk") && !it.name.startsWith("mapping-rewrite-") }
+            .maxWithOrNull(compareBy(File::lastModified))
+        assertTrue("transformed APK should exist for dex-perturb probe", apk != null)
+        var nops = 0
+        var methods = 0
+        java.util.zip.ZipFile(apk!!).use { zf ->
+            zf.entries().asSequence()
+                .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
+                .forEach { entry ->
+                    val dexFile = org.jf.dexlib2.dexbacked.DexBackedDexFile.fromInputStream(
+                        null,
+                        java.io.BufferedInputStream(zf.getInputStream(entry)),
+                    )
+                    for (clazz in dexFile.classes) {
+                        for (method in clazz.directMethods + clazz.virtualMethods) {
+                            val impl = method.implementation ?: continue
+                            methods++
+                            nops += impl.instructions.count { it.opcode == org.jf.dexlib2.Opcode.NOP }
+                        }
+                    }
+                }
+        }
+        assertTrue(
+            "dexPerturb must inject NOPs (methods=$methods nops=$nops)",
+            nops >= methods,
+        )
+    }
+
     private fun assertAssetsEncrypt(root: File) {
         val apk = File(root, "app/build").walkTopDown()
             .filter { it.isFile && it.name.endsWith(".apk") && !it.name.startsWith("mapping-rewrite-") }
@@ -311,6 +344,46 @@ object FeatureProbeAssertions {
                 }
             }
         return OpenCallStats(fogOpen, amOpen, hasRead, hasMain)
+    }
+
+    /** assets 加密 AAB 变体：base/assets/secret.cfg 密文 + FogAssets 类 + 调用点改写。 */
+    private fun assertAssetsEncryptAab(root: File) {
+        val aab = File(root, "app/build").walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".aab") }
+            .maxWithOrNull(compareBy(File::lastModified))
+        assertTrue("transformed AAB should exist for assets-encrypt probe", aab != null)
+        java.util.zip.ZipFile(aab!!).use { zf ->
+            val secret = zf.getInputStream(zf.getEntry("base/assets/secret.cfg")).use { it.readBytes() }
+            assertFalse(
+                "base/assets/secret.cfg must be encrypted (AAB)",
+                String(secret, Charsets.UTF_8).contains("token=abc123"),
+            )
+            val fogDescriptor =
+                io.github.amsonix.molt.internal.bundle.FogAssetsSource.fogAssetsDescriptor("fixture.app", 7)
+            var fogRefs = 0
+            zf.entries().asSequence()
+                .filter { it.name.endsWith(".dex") }
+                .forEach { entry ->
+                    val dexFile = org.jf.dexlib2.dexbacked.DexBackedDexFile.fromInputStream(
+                        null,
+                        java.io.BufferedInputStream(zf.getInputStream(entry)),
+                    )
+                    for (clazz in dexFile.classes) {
+                        for (method in clazz.directMethods + clazz.virtualMethods) {
+                            val impl = method.implementation ?: continue
+                            for (ins in impl.instructions) {
+                                val ref = (ins as? org.jf.dexlib2.iface.instruction.ReferenceInstruction)
+                                    ?.reference as? org.jf.dexlib2.iface.reference.MethodReference ?: continue
+                                if (ref.definingClass == fogDescriptor && ref.name == "open") fogRefs++
+                            }
+                        }
+                    }
+                }
+            assertTrue(
+                "AAB dex 必须有 FogAssets.open 调用（加密文件 + 改写必须对齐）",
+                fogRefs > 0,
+            )
+        }
     }
 
     private fun assertBaselineSyncApk(root: File) {

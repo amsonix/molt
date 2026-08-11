@@ -31,6 +31,8 @@ F13-baseline-sync     baseline-sync   apk-rename   8.13.2  8.13  nightly    0
 F17-string-fog-aab    string-fog-assets aab-rename   8.13.2  8.13  nightly    0
 F19-runtime-smoke     string-fog-assets runtime      8.13.2  8.13  nightly    0
 F20-assets-encrypt    assets-encrypt   apk          8.13.2  8.13  nightly    0
+F20-assets-encrypt-aab assets-encrypt  aab          8.13.2  8.13  nightly    0
+F21-dex-perturb       dex-perturb      apk          8.13.2  8.13  nightly    0
 
 # --- cross-agp (9.3.0 bookend; gate = AGP 9 兼容性纳入 PR 回归) ---
 F00-baseline          default         all          9.3.0   9.5   gate       1

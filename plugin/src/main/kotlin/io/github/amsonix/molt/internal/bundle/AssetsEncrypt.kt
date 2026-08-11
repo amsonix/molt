@@ -198,16 +198,43 @@ internal object DexAssetEncryptor {
                 for (index in instructions.indices) {
                     val instruction = instructions[index]
                     val pathRegister = callPathRegister(instruction, isTarget) ?: continue
-                    val previous = if (index > 0) instructions[index - 1] else null
-                    if (previous !is org.jf.dexlib2.iface.instruction.OneRegisterInstruction) continue
-                    if (previous !is org.jf.dexlib2.iface.instruction.ReferenceInstruction) continue
-                    val stringRef = previous.reference as? org.jf.dexlib2.iface.reference.StringReference ?: continue
-                    if (previous.registerA != pathRegister) continue
-                    paths.add(stringRef.string)
+                    findConstStringBefore(instructions, index, pathRegister)?.let { paths.add(it) }
                 }
             }
         }
         return paths
+    }
+
+    /**
+     * 向前查找写入 [register] 的 const-string。
+     * 两参调用（open(String, int)）中 const-string 与 invoke 之间可能隔 mode 常量指令
+     * （如 const/4 0）——允许跳过 const 系指令，其余指令停止。
+     */
+    private fun findConstStringBefore(
+        instructions: List<org.jf.dexlib2.iface.instruction.Instruction>,
+        index: Int,
+        register: Int,
+    ): String? {
+        var i = index - 1
+        var steps = 0
+        while (i >= 0 && steps < 3) {
+            val ins = instructions[i]
+            if (ins is org.jf.dexlib2.iface.instruction.OneRegisterInstruction &&
+                ins is org.jf.dexlib2.iface.instruction.ReferenceInstruction
+            ) {
+                val ref = ins.reference as? org.jf.dexlib2.iface.reference.StringReference
+                if (ref != null && ins.registerA == register) return ref.string
+            }
+            val op = ins.opcode
+            if (op != Opcode.CONST_4 && op != Opcode.CONST &&
+                op != Opcode.CONST_16 && op != Opcode.CONST_HIGH16
+            ) {
+                break
+            }
+            i--
+            steps++
+        }
+        return null
     }
 
     private fun callPathRegister(
@@ -279,12 +306,8 @@ internal object DexAssetEncryptor {
                 else -> null
             }
             if (pathRegister == null) continue
-            val previous = if (index > 0) instructions[index - 1] else null
-            if (previous !is org.jf.dexlib2.iface.instruction.OneRegisterInstruction) continue
-            if (previous !is org.jf.dexlib2.iface.instruction.ReferenceInstruction) continue
-            val stringRef = previous.reference as? org.jf.dexlib2.iface.reference.StringReference ?: continue
-            if (previous.registerA != pathRegister) continue
-            if (stringRef.string !in encryptedPaths) continue
+            val path = findConstStringBefore(instructions, index, pathRegister) ?: continue
+            if (path !in encryptedPaths) continue
             // 参数寄存器：invoke-virtual {AssetManager, p0, p1...}——p0 是第二个寄存器。
             val firstArgRegister = when (instruction) {
                 is org.jf.dexlib2.iface.instruction.FiveRegisterInstruction -> instruction.registerD
@@ -542,8 +565,9 @@ internal object ZipAssetEncryptor {
         scanner: (org.jf.dexlib2.dexbacked.DexBackedDexFile) -> Set<String>,
     ): Set<String> {
         val referenced = mutableSetOf<String>()
+        // APK 为 classes*.dex；AAB 为 base/dex/classes*.dex（assets 内嵌 SDK dex 排除）。
         zipIn.entries().asSequence()
-            .filter { it.name.startsWith("classes") && it.name.endsWith(".dex") }
+            .filter { it.name.endsWith(".dex") && !it.name.startsWith("assets/") }
             .forEach { entry ->
                 val dexFile = org.jf.dexlib2.dexbacked.DexBackedDexFile.fromInputStream(
                     null,
