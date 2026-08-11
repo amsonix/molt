@@ -4,6 +4,7 @@ import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import io.github.amsonix.molt.internal.util.MoltObfuscateDefaults
+import io.github.amsonix.molt.internal.util.SourceSetDirectoriesCompat
 import io.github.amsonix.molt.internal.util.ObfuscationMappingFileResolver
 import io.github.amsonix.molt.internal.util.variantCapitalizedName
 import org.gradle.api.Plugin
@@ -74,7 +75,7 @@ class MoltObfuscatePlugin : Plugin<Project> {
             val selectedSourceSets = MoltObfuscateDescriptorWiring.collectVariantSourceSets(android, variant)
             val sourceSetNames = MoltObfuscateDescriptorWiring.collectVariantSourceSetNames(variant)
             val sourceRoots = selectedSourceSets.flatMap { sourceSet ->
-                sourceSet.java.directories.map(::File) +
+                SourceSetDirectoriesCompat.of(sourceSet, "getJava") +
                     File(project.projectDir, "src/${sourceSet.name}/kotlin")
             }.distinctBy { it.absoluteFile.normalize() }
             val manifests = selectedSourceSets.mapNotNull { sourceSet ->

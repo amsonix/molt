@@ -3,6 +3,7 @@ package io.github.amsonix.molt
 import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.variant.ApplicationVariant
 import io.github.amsonix.molt.internal.util.AppLibraryDependencyGraph
+import io.github.amsonix.molt.internal.util.SourceSetDirectoriesCompat
 import io.github.amsonix.molt.internal.util.variantCapitalizedName
 import org.gradle.api.Project
 import org.gradle.api.tasks.TaskProvider
@@ -111,7 +112,7 @@ internal object MoltObfuscateDescriptorWiring {
         sourceSetNames: List<String>,
     ): List<File> {
         val fromAgp = sourceSetNames.mapNotNull(android.sourceSets::findByName)
-            .flatMap { it.res.directories.map(::File) }
+            .flatMap { SourceSetDirectoriesCompat.of(it, "getRes") }
             .filter { it.isDirectory && isProjectResSourceDir(project, it) }
             .distinctBy { it.absoluteFile.normalize() }
         val fromSourceTree = conventionalVariantResDirs(project, sourceSetNames)
@@ -203,7 +204,7 @@ internal object MoltObfuscateDescriptorWiring {
         listOf(
             File(project.projectDir, "src/main/java"),
             File(project.projectDir, "src/main/kotlin"),
-        ) + android.sourceSets.flatMap { it.java.directories.map(::File) }
+        ) + android.sourceSets.flatMap { SourceSetDirectoriesCompat.of(it, "getJava") }
     ).distinctBy { it.absoluteFile.normalize() }
 
     private fun collectDescriptorManifestFiles(
@@ -219,7 +220,7 @@ internal object MoltObfuscateDescriptorWiring {
             .distinctBy { it.absoluteFile.normalize() }
 
     private fun collectDescriptorLayoutDirs(android: CommonExtension<*, *, *, *, *, *>): List<File> =
-        collectLayoutDirs(android.sourceSets.flatMap { set -> set.res.directories.map(::File) })
+        collectLayoutDirs(android.sourceSets.flatMap { set -> SourceSetDirectoriesCompat.of(set, "getRes") })
 }
 
 private fun File.pathRelativeTo(base: File): String =
