@@ -95,7 +95,7 @@ class AssetsEncryptTest {
             emptyList(),
         )
         val input = buildDex(clazz)
-        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config, setOf("secret.cfg"))
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
         val rebuilt = buildDex(output)
         val parsed = openDex(rebuilt)
 
@@ -160,7 +160,7 @@ class AssetsEncryptTest {
         )
         val input = buildDex(clazz)
         val emptyMapping = io.github.amsonix.molt.internal.rename.RenameMapping.fromForward(emptyMap())
-        val output = DexInPlaceRenameEngine.remapBytes(input, emptyMapping, null, null, null, config, setOf("secret.cfg"))
+        val output = DexInPlaceRenameEngine.remapBytes(input, emptyMapping, null, null, null, config)
         assertFalse("assets-only dex must still be rewritten", output.contentEquals(input))
 
         val parsed = openDex(output)
@@ -223,7 +223,7 @@ class AssetsEncryptTest {
             emptyList(),
         )
         val input = buildDex(clazz)
-        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config, setOf("secret.cfg"))
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
         val rebuilt = buildDex(output)
         val parsed = openDex(rebuilt)
 
@@ -286,7 +286,7 @@ class AssetsEncryptTest {
             emptyList(),
         )
         val input = buildDex(clazz)
-        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config, setOf("secret.cfg"))
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
         val rebuilt = buildDex(output)
         val parsed = openDex(rebuilt)
 
@@ -349,7 +349,7 @@ class AssetsEncryptTest {
             emptyList(),
         )
         val input = buildDex(clazz)
-        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config, setOf("secret.cfg"))
+        val output = DexAssetEncryptor.rewriteClass(openDex(input).classes.first(), config)
         val rebuilt = buildDex(output)
         val parsed = openDex(rebuilt)
 
@@ -659,10 +659,8 @@ class AssetsEncryptTest {
             }
             val configWithVideo = config.copy(filePatterns = listOf("*.json", "*.mp4", "*.bin"))
             val result = ZipAssetEncryptor.patchZipInPlace(zip, configWithVideo, "assets/")
-            assertEquals(1, result.encrypted)
-            assertEquals(0, result.fdExcluded)
+            assertEquals(2, result.encrypted)
             assertEquals(1, result.mediaSkipped)
-            assertEquals(1, result.noCallSite)
 
             java.util.zip.ZipFile(zip).use { zf ->
                 val video = zf.getInputStream(zf.getEntry("assets/video.mp4")).use { it.readBytes() }
@@ -681,8 +679,8 @@ class AssetsEncryptTest {
                     zf.getEntry("assets/config.json").method,
                 )
                 val raw = zf.getInputStream(zf.getEntry("assets/raw.bin")).use { it.readBytes() }
-                assertTrue(
-                    "无常量调用点的文件必须保持明文（动态拼接/反射读取）",
+                assertFalse(
+                    "无调用点文件现在也加密（运行时 FogAssets 判定解密）",
                     String(raw, Charsets.UTF_8).contains("RAWPLAINTEXT"),
                 )
             }

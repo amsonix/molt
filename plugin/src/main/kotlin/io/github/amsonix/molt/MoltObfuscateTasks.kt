@@ -279,6 +279,14 @@ abstract class MoltObfuscateGenerateFogAssetsTask : DefaultTask() {
     @get:Input
     abstract val applicationId: Property<String>
 
+    /** 加密清单 glob（运行时 FogAssets 判定"path 是否加密"）。 */
+    @get:Input
+    abstract val filePatterns: ListProperty<String>
+
+    /** AAPT no-compress 媒体扩展名（运行时透传判定）。 */
+    @get:Input
+    abstract val mediaExtensions: ListProperty<String>
+
     @get:OutputDirectory
     abstract val outputDirectory: DirectoryProperty
 
@@ -298,7 +306,12 @@ abstract class MoltObfuscateGenerateFogAssetsTask : DefaultTask() {
         packageDir.mkdirs()
         val fogAssetsSeed = seed.get()
         val (fogAssets, initializer) = io.github.amsonix.molt.internal.bundle.FogAssetsSource
-            .buildSource(applicationId.get(), fogAssetsSeed)
+            .buildSource(
+                applicationId = applicationId.get(),
+                seed = fogAssetsSeed,
+                filePatterns = filePatterns.get(),
+                mediaExtensions = mediaExtensions.get().toSet(),
+            )
         File(
             packageDir,
             io.github.amsonix.molt.internal.bundle.FogAssetsSource.fogAssetsClassName(fogAssetsSeed) + ".java",
