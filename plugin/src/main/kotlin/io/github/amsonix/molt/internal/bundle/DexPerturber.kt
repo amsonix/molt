@@ -53,12 +53,22 @@ internal object DexPerturber {
             "dex-perturb-${method.definingClass}-${method.name}-${method.parameters.size}",
         )
         val mmi = MutableMethodImplementation(implementation)
-        val instructions = mmi.instructions
-        if (instructions.isEmpty()) return method
+        if (mmi.instructions.isEmpty()) return method
         val nopCount = config.nopRange.random(random)
         repeat(nopCount) {
-            val index = random.nextInt(instructions.size)
-            mmi.addInstruction(index, BuilderInstruction10x(Opcode.NOP))
+            // move-result/move-exception 必须紧邻其 invoke/异常头指令（DEX 规范），中间插入
+            // 任何指令都会触发 ART VerifyError（"copyRes1 v1<- result0 type=Undefined"）。
+            // 在"该指令自身"位置插入 = 把它与其前置指令隔开 → 只允许在非常感指令前插入。
+            val safeIndices = mmi.instructions.indices.filter { index ->
+                val target = mmi.instructions[index]
+                if (target !is org.jf.dexlib2.iface.instruction.OneRegisterInstruction) return@filter true
+                target.opcode != Opcode.MOVE_RESULT &&
+                    target.opcode != Opcode.MOVE_RESULT_OBJECT &&
+                    target.opcode != Opcode.MOVE_RESULT_WIDE &&
+                    target.opcode != Opcode.MOVE_EXCEPTION
+            }
+            if (safeIndices.isEmpty()) return method
+            mmi.addInstruction(safeIndices[random.nextInt(safeIndices.size)], BuilderInstruction10x(Opcode.NOP))
         }
         return ImmutableMethod(
             method.definingClass,

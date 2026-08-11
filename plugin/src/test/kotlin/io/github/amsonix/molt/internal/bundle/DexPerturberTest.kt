@@ -9,6 +9,9 @@ import org.jf.dexlib2.immutable.ImmutableMethod
 import org.jf.dexlib2.immutable.ImmutableMethodImplementation
 import org.jf.dexlib2.immutable.instruction.ImmutableInstruction10x
 import org.jf.dexlib2.immutable.instruction.ImmutableInstruction11n
+import org.jf.dexlib2.immutable.instruction.ImmutableInstruction11x
+import org.jf.dexlib2.immutable.instruction.ImmutableInstruction35c
+import org.jf.dexlib2.immutable.reference.ImmutableMethodReference
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.jf.dexlib2.writer.pool.DexPool
 import org.junit.Assert.assertEquals
@@ -53,6 +56,71 @@ class DexPerturberTest {
         },
         emptyList(),
     )
+
+    @Test
+    fun perturb_neverBreaksMoveResultAdjacency() {
+        val owner = "Lcom/example/app/App;"
+        val invoke = ImmutableInstruction35c(
+            Opcode.INVOKE_STATIC,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            ImmutableMethodReference(
+                "Lcom/example/app/Util;",
+                "getCount",
+                emptyList(),
+                "I",
+            ),
+        )
+        val moveResult = ImmutableInstruction11x(Opcode.MOVE_RESULT, 1)
+        val clazz = ImmutableClassDef(
+            owner,
+            AccessFlags.PUBLIC.value,
+            "Ljava/lang/Object;",
+            emptyList(),
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            listOf(
+                ImmutableMethod(
+                    owner,
+                    "attachBaseContext",
+                    emptyList(),
+                    "I",
+                    AccessFlags.PUBLIC.value,
+                    emptySet(),
+                    emptySet(),
+                    ImmutableMethodImplementation(
+                        2,
+                        listOf(invoke, moveResult, ImmutableInstruction11x(Opcode.RETURN, 1)),
+                        emptyList(),
+                        emptyList(),
+                    ),
+                ),
+            ),
+            emptyList(),
+        )
+        repeat(50) { seed ->
+            val input = buildDex(clazz)
+            val config = DexPerturbationConfig(seed = seed, intensity = "heavy")
+            val output = DexPerturber.rewriteClass(openDex(input).classes.first(), config)
+            val rebuilt = buildDex(output)
+            val parsed = openDex(rebuilt)
+            val instructions = parsed.classes.first().directMethods.first().implementation!!.instructions.toList()
+            for (index in instructions.indices) {
+                if (instructions[index].opcode == Opcode.MOVE_RESULT) {
+                    assertTrue(
+                        "move-result must stay adjacent to its invoke (seed=$seed)",
+                        index > 0 && instructions[index - 1].opcode == Opcode.INVOKE_STATIC,
+                    )
+                }
+            }
+        }
+    }
 
     private fun buildDex(vararg classes: org.jf.dexlib2.iface.ClassDef): ByteArray {
         val pool = DexPool(Opcodes.getDefault())
