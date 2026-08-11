@@ -145,6 +145,14 @@ run_row() {
           echo "PASS"
         fi
       else
+        # 打印嵌套构建完整输出（TestKit 断言消息含 build output），否则 CI 日志只显示断言首行。
+        local results_xml
+        results_xml=$(ls plugin/build/test-results/moltObfuscateFeatureProbeTest/TEST-*.xml 2>/dev/null | head -1)
+        if [[ -n "$results_xml" ]]; then
+          echo "--- nested probe test results (${results_xml}) ---" >&2
+          sed -n 's/.*message="\([^"]*\)".*/\1/p' "$results_xml" | head -c 60000 >&2
+          echo "" >&2
+        fi
         echo "FAIL"
       fi
       ;;

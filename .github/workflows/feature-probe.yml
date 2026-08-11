@@ -69,8 +69,23 @@ jobs:
             --no-daemon
 
       - name: Fail if required row failed
-        if: matrix.required == '1'
-        run: test "${{ steps.probe.outcome }}" = "success"
+        if: matrix.required == '1' && steps.probe.outcome != 'success'
+        run: |
+          test "${{ steps.probe.outcome }}" = "success" || true
+          echo "::group::Probe test results XML (nested build output)"
+          cat plugin/build/test-results/moltObfuscateFeatureProbeTest/TEST-*.xml || true
+          echo "::endgroup::"
+          exit 1
+
+      - name: Upload probe test results on failure
+        if: always() && steps.probe.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-results-${{ matrix.feature }}
+          path: |
+            plugin/build/test-results/moltObfuscateFeatureProbeTest/
+            plugin/build/reports/tests/moltObfuscateFeatureProbeTest/
+          if-no-files-found: ignore
 
   feature-probe-gate-agp802:
     runs-on: ubuntu-latest
@@ -84,6 +99,16 @@ jobs:
       - uses: android-actions/setup-android@v3
       - run: |
           MOLT_FEATURE_AGP=8.0.2 MOLT_FEATURE_GRADLE=8.0 FEATURE_PROBE_TIER=gate ./tools/feature-probe.sh
+      - name: Upload probe results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-results-agp802
+          path: |
+            plugin/build/test-results/moltObfuscateFeatureProbeTest/
+            plugin/build/reports/tests/moltObfuscateFeatureProbeTest/
+            build/reports/feature-probe/
+          if-no-files-found: ignore
 
   feature-probe-nightly:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
