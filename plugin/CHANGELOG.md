@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 — 2026-08-12
 
-### Fixed（1.1.0 发布后工作区改动，未提交；将随下一版本发布）
+### Fixed
 
 - Crashlytics upload 接线改为任务配置期 `matching` 匹配：**eager wiring 在 task 注册期会破坏 Crashlytics 3.x**（`generateCrashlyticsSymbolFile*` 创建时序）
 - `AgpToolchainCompatibility.MIN_AGP_FOR_BUNDLE_TRANSFORM` 修正为 **8.0.2**（与兼容矩阵下限一致）
@@ -34,6 +34,17 @@
 - **图片 anti-detect 验证盲区闭合**：transform 阶段 metadata 兜底注入记录（entry + md5）写入独立 report（APK/AAB 隔离，叠加 overlay 共享 report）——`verifyApkImageAntiDetect` / `verifyBundleImageAntiDetect` 现在校验兜底注入未丢失（此前仅校验可解码，注入静默失效不报错）
 
 - **DEX 控制流扰动**（`dexPerturb { }`）：post-R8 向工程包类方法体注入 `nop` 垃圾指令（`light`/`medium`/`heavy` 量级，seed 确定性，跨构建不同）；与 rename/字符串加密共用同一趟 dexlib2 重建；零运行时影响
+
+### Added（1.2.0）
+
+- **assets 加密升级为运行时路径判定**：FogAssets 内置编译后的 `filePatterns` glob + AAPT no-compress 媒体列表，运行时"路径命中清单且非媒体 → 解密，否则透传"——**动态参数读取（封装函数如 `loadJSONFromAsset(fileName)`）的加密文件也能解密**（此前仅常量调用点）；所有 `AssetManager.open` 调用点统一改写；加密决策简化为 `filePatterns ∩ 非媒体`（fd 排除 / noCallSite 概念移除）
+- **Fog / FogAssets 类名 seed 派生随机化**（防 grep 固定类名的自动化提取）；keep 规则按精确 `applicationId` 前缀生成（`**.shell.fog.*` 通配移除，杜绝用户包名误伤）
+- **AGP 9 支持**：`AppExtension` → 新 DSL `ApplicationExtension` 迁移（onVariants 捕获、namespace/sourceSets 新访问器）、`MoltPrintVariantPlanTask` 配置期捕获、source set 目录 AGP 8.0–8.4 兼容（`AndroidSourceDirectorySet` 读取器 8.5 才出现）
+- 探针新增 **F20-assets-encrypt（apk）/ F20-assets-encrypt-aab / F21-dex-perturb**：AAB 加密链路（`base/assets/` 密文 + dex 改写断言）、dexPerturb 独立 e2e（NOP ≥ 方法数）
+- 探针 SKIP 检测：TestKit skipped（无设备）此前误报 PASS——脚本检查结果 XML `skipped` 属性
+- 全插件 java.util.logging 收编为 Gradle logger 回调（APK/AAB 双链路告警可见）
+- 构建期告警经 Gradle logger 输出（mediaSkipped / 加密统计）
+- Gradle Plugin Portal 发布流程（`publishMoltToGradlePortal`）+ 1.2.0 发布
 
 ### Docs
 

@@ -10,7 +10,7 @@ Use cases: raise the cost of reverse engineering / repackaging, protect resource
 |---|---|
 | Plugin ID | `io.github.amsonix.molt` |
 | Extension | `molt { }` |
-| Version | `1.1.0` |
+| Version | `1.2.0` |
 | Requirements | AGP **8.0.0 – 9.3.x** (probed) · [probe report](docs/COMPATIBILITY.md) |
 
 ## What it does
@@ -73,7 +73,7 @@ pluginManagement {
 }
 
 plugins {
-    id("io.github.amsonix.molt") version "1.1.0" apply false
+    id("io.github.amsonix.molt") version "1.2.0" apply false
 }
 ```
 
