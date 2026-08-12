@@ -188,4 +188,5 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v3
+      - run: ./gradlew :plugin:publishToMavenLocal
       - run: FEATURE_PROBE_TIER=weekly ./tools/feature-probe.sh
