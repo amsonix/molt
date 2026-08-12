@@ -73,7 +73,7 @@ pluginManagement {
 }
 
 plugins {
-    id("io.github.amsonix.molt") version "1.1.0" apply false
+    id("io.github.amsonix.molt") version "1.2.0" apply false
 }
 ```
 
