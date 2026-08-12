@@ -8,13 +8,13 @@
 |------|------|
 | assets 文本加密档（声明清单 + FogAssets 解密 + ContentProvider 初始化） | ✅ 已完成（4 个提交迭代）：调用点改写（`open`/`open(String,int)`）、openFd 常量调用自动排除、AAPT no-compress 媒体扩展名意图层排除、加密条目强制 DEFLATED（openFd 遇压缩必抛 IOException 免疫）、构建期告警经 Gradle logger 输出 |
 | DEX 控制流扰动（junk nop 注入） | ✅ 已完成（`dexPerturb`，seed 派生确定性，独立于 stringEncrypt 可单独启用） |
+| Fog/FogAssets 类名随机化（防自动化提取靶子） | ✅ 已完成（1.2.0）：解密类名由 seed 派生（`fogClassName` / `fogAssetsClassName`），每次构建不同；keep 规则按精确 applicationId 前缀生成 |
 
 ## Backlog（按价值排序）
 
 | 方向 | 服务定位 | 成本 | 状态 |
 |------|----------|------|------|
 | ~~配置内联化~~（已否决：保护强度不增——解密函数同在 dex 可提取；字符串常量常驻内存 GC 不回收、dex 膨胀。assets 加密按需解密内存可控，保留为唯一方案） | — | — | 已否决 |
-| Fog/FogAssets 类名随机化（防自动化提取靶子） | 自保护 | 半天 | 待排期 |
 | 全插件 java.util.logging → Gradle logger 收编（AssetsProtectionEngine 等 8 处） | 告警可见性 | 半天 | 待排期 |
 | cross-agp 9.3.0 探针行升 gate | 兼容性回归 | 半小时 | 待排期 |
 
