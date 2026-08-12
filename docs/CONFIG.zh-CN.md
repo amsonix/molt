@@ -139,6 +139,17 @@ R8 完成后对 DEX 做字符串加密：`const-string` 替换为 `Fog.d(...)` �
 | `junkFileCount` | `Int` | `3` | 注入的假文件数量 | — |
 | `excludePatterns` | `List<String>` | 空 | 跳过的文件名/路径 glob | — |
 
+## `assetsEncrypt { }`
+
+产物阶段对 `assets/` 命中清单的文件**加密**：清单命中且非媒体扩展名的条目加密为密文，并把字节码中所有 `AssetManager.open` 常量调用点改写为 `FogAssets.open()` 解密调用（ContentProvider 自动初始化，无需手动注册）。**运行时路径判定**：FogAssets 内置编译后的 `filePatterns` glob + AAPT no-compress 媒体扩展名列表（jpg/mp4/mp3/ttf 等 35 个），"路径命中清单且非媒体 → 解密，否则透传"——动态参数读取（如 `loadJSONFromAsset(fileName)` 封装）的加密文件也能解密。
+
+**内置安全过滤：** openFd 常量调用自动排除（fd 无解密层）；媒体扩展名意图层排除（openFd 直读路径不经 Java 解密层）；加密条目强制 DEFLATED（openFd 遇压缩必抛 IOException，杜绝密文 fd）。动态拼接路径、反射读取的文件不加密（构建期告警提示）；WebView `file:///android_asset/` 建议迁移 `WebViewAssetLoader`（其 `open()` 调用点被自动覆盖）。
+
+| 选项 | 类型 | 默认值 | 说明 | variant 可覆盖 |
+|------|------|--------|------|----------------|
+| `enabled` | `Boolean` | `false` | assets 加密开关 | ✓ |
+| `filePatterns` | `List<String>` | 空 | 声明清单（文件名 glob，如 `*.json`）；命中的 assets 文件加密并走 FogAssets 解密 | — |
+
 ## `componentRename { }`
 
 R8 完成后，将 Manifest / layout / navigation 等引用的组件完整类名（FQCN）映射为随机短名，并 patch DEX。
@@ -195,5 +206,7 @@ variantConfig {
 | `componentRename` | `enabled` |
 | `stringEncrypt` | `enabled` |
 | `assetsProtect` | `enabled` |
+| `assetsEncrypt` | `enabled` |
+| `dexPerturb` | `enabled` |
 | `viewRename` | `enabled` |
 | `verify` | `verifyApkKeep`, `verifyBundleKeep` |

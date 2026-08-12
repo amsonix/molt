@@ -155,6 +155,17 @@ Lightweight `assets/` perturbation at transform time (APK `assets/`, AAB `base/a
 | `junkFileCount` | `Int` | `3` | Number of injected junk files | — |
 | `excludePatterns` | `List<String>` | empty | File-name / path globs to skip | — |
 
+## `assetsEncrypt { }`
+
+Encrypts `assets/` entries matched by the declared manifest at transform time: matched non-media entries are encrypted, and all constant `AssetManager.open` call sites in bytecode are rewritten to `FogAssets.open()` decrypt calls (ContentProvider auto-init, no manual registration). **Runtime path decision**: FogAssets embeds the compiled `filePatterns` glob plus the AAPT no-compress media extension list (jpg/mp4/mp3/ttf etc., 35 entries) and decides at runtime — path matches glob && non-media → decrypt, otherwise transparent passthrough — so dynamic-parameter reads (e.g. a `loadJSONFromAsset(fileName)` wrapper) also decrypt.
+
+**Built-in safety filters:** openFd constant calls are auto-excluded (fd has no decrypt layer); media extensions are excluded at intent level (openFd-direct reads bypass the Java decrypt layer); encrypted entries are forced DEFLATED (openFd always throws IOException on compressed entries — no ciphertext fd). Dynamically concatenated paths / reflection reads stay unencrypted (build-time warning); for WebView `file:///android_asset/`, migrate to `WebViewAssetLoader` (its `open()` calls are auto-rewritten).
+
+| Option | Type | Default | Description | Variant override |
+|--------|------|---------|-------------|------------------|
+| `enabled` | `Boolean` | `false` | Assets encryption switch | ✓ |
+| `filePatterns` | `List<String>` | empty | Declared manifest (file-name globs, e.g. `*.json`); matched assets entries are encrypted and decrypted via FogAssets | — |
+
 ## `viewRename { }`
 
 After R8, renames custom View classes in layout / navigation XML (system / AndroidX widgets unchanged).
@@ -195,5 +206,7 @@ variantConfig {
 | `componentRename` | `enabled` |
 | `stringEncrypt` | `enabled` |
 | `assetsProtect` | `enabled` |
+| `assetsEncrypt` | `enabled` |
+| `dexPerturb` | `enabled` |
 | `viewRename` | `enabled` |
 | `verify` | `verifyApkKeep`, `verifyBundleKeep` |
