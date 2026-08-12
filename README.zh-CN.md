@@ -10,7 +10,7 @@
 |----|-----|
 | Plugin ID | `io.github.amsonix.molt` |
 | 扩展块 | `molt { }` |
-| 当前版本 | `1.1.0` |
+| 当前版本 | `1.2.0` |
 | 要求 | AGP **8.0.0 – 9.3.x**（探测矩阵）· [探测报告](docs/COMPATIBILITY.zh-CN.md) |
 
 ## 它能做什么

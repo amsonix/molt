@@ -48,6 +48,9 @@ Preset = 在 `AgpTestFixture.writeFixture` 之上的 **声明式覆盖**（`Feat
 | `variant-config` | `variantConfig { googleRelease { junk heavy; verify on } }` | variant 级覆盖 |
 | `shrink-keep` | `mergeShrinkKeepXml=true`, fixture 注册 mock `generateShrinkKeepXml*` | shrink keep 合并 |
 | `rename-full` | rename 全开（同 apk-rename/aab-rename 探针） | DEX + layout + mapping |
+| `string-fog-assets` | `stringEncrypt=true` + `assetsProtect=true`（F16/F17） | DEX 明文残留 0、Fog 类存在、assets JSON 假字段 |
+| `assets-encrypt` | `assetsEncrypt{ filePatterns }` + marker 明文（F20 APK/AAB） | 命中文件密文、AssetManager 调用点改写、运行时解密 |
+| `dex-perturb` | `dexPerturb{ intensity }`（F21） | 方法体 nop 注入、seed 确定性 |
 
 ## 功能矩阵（`tools/feature-probe-matrix.txt`）
 
@@ -59,7 +62,7 @@ Preset = 在 `AgpTestFixture.writeFixture` 之上的 **声明式覆盖**（`Feat
 |------|-----|------|
 | `gate` | PR 必过 | 核心功能，约 5 行 |
 | `nightly` | nightly job | 全功能 preset |
-| `cross-agp` | release/weekly | 在 **9.3.0 / 9.5** 上复跑 gate 子集 |
+| `cross-agp` | release/weekly | 在 **9.3.0 / 9.5.0** 上复跑 gate 子集 |
 | `weekly` | weekly job | sample / 宿主 integration smoke（缺目录时 SKIP） |
 
 ### 与现有测试的关系
@@ -80,10 +83,15 @@ Preset = 在 `AgpTestFixture.writeFixture` 之上的 **声明式覆盖**（`Feat
 | F01-overlay-rename | generated res 中 `google.xml` 被 rename；`base.xml` 因 keep 保留 |
 | F02-overlay-images | overlay 日志 / 图片 hash 变化 |
 | F04-junk-activity | merged manifest 含 junk Activity；DEX 含 junk 类 |
+| F05/F06 default 基线 | task SUCCESS + 产物存在（APK/AAB transform 对照基线） |
 | F07/F08 arsc-* | `resources-mapping.txt` 非空；mode 特定 entry |
+| F09-rename-apk | 合成 mapping 存在；组件改名落地 APK |
 | F11-keep-verify | 验包 task 无 fail；关键 `@layout/` 仍在 APK |
 | F13-baseline-sync | `baseline.profm` 产物更新 |
 | F14-variant-config | googleRelease 使用 heavy junk 规模 |
+| F16/F17 string-fog-assets | DEX 明文残留 0；Fog 解密类存在；assets JSON 假字段 + 假文件 |
+| F20 assets-encrypt | 命中 assets 密文；`AssetManager.open` 调用点改写；运行时可解密 |
+| F21 dex-perturb | 方法体含注入 nop；seed 确定性 |
 
 ## 运行方式
 
