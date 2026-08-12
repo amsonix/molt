@@ -38,7 +38,7 @@ Use cases: raise the cost of reverse engineering / repackaging, protect resource
 
 **Boundaries (honest)**:
 - All client-side encryption (commercial included) keeps keys on-device: **does not resist targeted attacks** (determined reverse engineers can recover via the decrypt functions)
-- `Fog`/`FogAssets` class names are fixed — an automated-extraction target; known boundary
+- `Fog`/`FogAssets` class names are seed-derived and randomized per build (e.g. `Fxg3`, `Fovqk1`), but the decrypt functions still live in the app dex: a targeted analyst who locates the decrypt function can still recover plaintext — known boundary
 - Call-site rewrite covers constant bytecode calls only; dynamic-path / reflection reads stay **unencrypted** (build-time warning)
 - openFd / WebView direct reads bypass the Java decrypt layer: openFd-consumed media files are not encrypted (intent layer); for WebView `file:///android_asset/`, migrate to `WebViewAssetLoader` (its `open()` calls are auto-rewritten)
 
