@@ -174,8 +174,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: |
-            MOLT_FEATURE_PROBE=F19-runtime-smoke RUN_SHELL_TRANSFORM_E2E=1 \
-              ./gradlew :plugin:moltObfuscateFeatureProbeTest --no-daemon
+            MOLT_FEATURE_PROBE=F19-runtime-smoke RUN_SHELL_TRANSFORM_E2E=1 ./gradlew :plugin:moltObfuscateFeatureProbeTest --no-daemon
 
   feature-probe-weekly:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
