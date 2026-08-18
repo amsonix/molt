@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# GitHub runners 不在中国大陆，直接用 google()/mavenCentral() 更稳；
+# aliyun 镜像在 CI 上偶发 502 会整行失败（本地跑探针仍默认走镜像）。
+env:
+  MOLT_PROBE_CHINA_MIRROR: 0
+
 jobs:
   unit:
     runs-on: ubuntu-latest

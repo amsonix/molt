@@ -35,13 +35,18 @@ internal object SourceSetDirectoriesCompat {
                 }
             }
         }.getOrNull() ?: run {
-            // 旧 DSL（AGP 8.0–8.4）：getSrcDirs() -> FileCollection（绝对路径）
+            // 旧 DSL（AGP 8.0–8.4）：getSrcDirs() 返回 Set<File>（绝对路径）；
+            // AGP 8.5+ 的旧 DSL 实现也可能返回 FileCollection，两种都兼容。
             runCatching {
                 val srcDirs = directorySet.javaClass
                     .getMethod("getSrcDirs")
-                    .invoke(directorySet) as? org.gradle.api.file.FileCollection
-                    ?: error("unexpected getSrcDirs() return")
-                return srcDirs.files.toList()
+                    .invoke(directorySet)
+                val files = when (srcDirs) {
+                    is org.gradle.api.file.FileCollection -> srcDirs.files.toList()
+                    is Collection<*> -> srcDirs.mapNotNull { it as? File }
+                    else -> error("unexpected getSrcDirs() return: ${srcDirs?.javaClass?.name}")
+                }
+                return files
             }.getOrNull()
         }
         return emptyList()
