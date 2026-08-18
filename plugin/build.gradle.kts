@@ -280,6 +280,10 @@ fun registerAgpCompatTest(
         testClassesDirs = sourceSets.test.get().output.classesDirs
         classpath = sourceSets.test.get().runtimeClasspath
         filter.includeTestsMatching("io.github.amsonix.molt.AgpCompatibilityTest.$testMethod")
+        val testAgp = providers.gradleProperty("testAgp").orElse("8.13.2")
+        val testGradle = providers.gradleProperty("testGradle").orElse("8.13")
+        inputs.property("agp", testAgp)
+        inputs.property("gradle", testGradle)
         doFirst {
             if (requireE2e) {
                 systemProperty("RUN_SHELL_TRANSFORM_E2E", "1")
@@ -341,10 +345,15 @@ fun registerFeatureProbeTest(
         testClassesDirs = sourceSets.test.get().output.classesDirs
         classpath = sourceSets.test.get().runtimeClasspath
         filter.includeTestsMatching("io.github.amsonix.molt.FeatureProbeTest.featureProbeRunsConfiguredRow")
+        val testAgp = providers.gradleProperty("testAgp").orElse("8.13.2")
+        val testGradle = providers.gradleProperty("testGradle").orElse("8.13")
+        inputs.property("feature", featureId)
+        inputs.property("agp", testAgp)
+        inputs.property("gradle", testGradle)
         doFirst {
             systemProperty("MOLT_FEATURE_PROBE", featureId)
-            systemProperty("MOLT_TEST_AGP", providers.gradleProperty("testAgp").orElse("8.13.2").get())
-            systemProperty("MOLT_TEST_GRADLE", providers.gradleProperty("testGradle").orElse("8.13").get())
+            systemProperty("MOLT_TEST_AGP", testAgp.get())
+            systemProperty("MOLT_TEST_GRADLE", testGradle.get())
             systemProperty("RUN_SHELL_TRANSFORM_E2E", "1")
         }
     }
@@ -357,14 +366,19 @@ tasks.register<Test>("moltObfuscateFeatureProbeTest") {
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     filter.includeTestsMatching("io.github.amsonix.molt.FeatureProbeTest.featureProbeRunsConfiguredRow")
+    val feature = providers.gradleProperty("moltFeature")
+        .orElse(providers.environmentVariable("MOLT_FEATURE_PROBE"))
+        .orNull
+        ?: error("Set -PmoltFeature=<feature_id> or MOLT_FEATURE_PROBE")
+    val testAgp = providers.gradleProperty("testAgp").orElse("8.13.2")
+    val testGradle = providers.gradleProperty("testGradle").orElse("8.13")
+    inputs.property("feature", feature)
+    inputs.property("agp", testAgp)
+    inputs.property("gradle", testGradle)
     doFirst {
-        val feature = providers.gradleProperty("moltFeature")
-            .orElse(providers.environmentVariable("MOLT_FEATURE_PROBE"))
-            .orNull
-            ?: error("Set -PmoltFeature=<feature_id> or MOLT_FEATURE_PROBE")
         systemProperty("MOLT_FEATURE_PROBE", feature)
-        systemProperty("MOLT_TEST_AGP", providers.gradleProperty("testAgp").orElse("8.13.2").get())
-        systemProperty("MOLT_TEST_GRADLE", providers.gradleProperty("testGradle").orElse("8.13").get())
+        systemProperty("MOLT_TEST_AGP", testAgp.get())
+        systemProperty("MOLT_TEST_GRADLE", testGradle.get())
         systemProperty("RUN_SHELL_TRANSFORM_E2E", "1")
     }
 }
