@@ -210,7 +210,15 @@ class FeatureProbeTest {
             assertTrue("APK missing for runtime probe", apk != null)
 
             exec(adb, "logcat", "-c")
+            // adb 在模拟器刚启动、尚未稳定的窗口期会随机失败。失败时把原始输出打到 stdout，
+            // 否则 CI 上只能看到 "AssertionError at FeatureProbeTest.kt:214"，无从定位。
             val installOut = exec(adb, "install", "-r", apk!!.absolutePath)
+            if (!installOut.contains("Success")) {
+                println("[runtime-probe] adb install did not report Success")
+                println("[runtime-probe] apk=${apk.absolutePath} (${apk.length()} bytes)")
+                println("[runtime-probe] install output >>>\n$installOut\n<<<")
+                println("[runtime-probe] adb devices -l >>>\n${exec(adb, "devices", "-l")}\n<<<")
+            }
             assertTrue("adb install must succeed: $installOut", installOut.contains("Success"))
 
             val pkg = "fixture.app"

@@ -8,3 +8,4 @@ sample/gradle.properties.local
 *.iml
 .DS_Store
 *.hprof
+.guserhome/

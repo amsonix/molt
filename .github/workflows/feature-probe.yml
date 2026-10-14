@@ -173,13 +173,42 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: reactivecircus/android-emulator-runner@v2
+      # ubuntu-latest 默认不把 runner 用户放进 kvm 组。emulator-runner 探测 KVM 失败后会
+      # 强制 "-accel off"（x86_64 纯软件模拟）：启动 >6 分钟、且 adb 操作随机失败。
+      # 这是 reactivecircus/android-emulator-runner README 记载的官方修复方式。
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
+
+      - name: Run runtime smoke probe
+        id: probe
+        uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           disable-animations: true
           script: |
             MOLT_FEATURE_PROBE=F19-runtime-smoke RUN_SHELL_TRANSFORM_E2E=1 ./gradlew :plugin:moltObfuscateFeatureProbeTest --no-daemon
+
+      - name: Runtime smoke diagnostics
+        if: always() && steps.probe.outcome == 'failure'
+        run: |
+          echo "::group::Runtime smoke test results XML"
+          cat plugin/build/test-results/moltObfuscateFeatureProbeTest/TEST-*.xml || true
+          echo "::endgroup::"
+
+      - name: Upload runtime smoke results on failure
+        if: always() && steps.probe.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-smoke-results-${{ matrix.api-level }}
+          path: |
+            plugin/build/test-results/moltObfuscateFeatureProbeTest/
+            plugin/build/reports/tests/moltObfuscateFeatureProbeTest/
+          if-no-files-found: ignore
 
   feature-probe-weekly:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
