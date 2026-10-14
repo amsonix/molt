@@ -31,7 +31,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - run: |
           ./gradlew :plugin:moltObfuscateAgpCompatTest \
             -PtestAgp=8.0.2 -PtestGradle=8.0 --no-daemon
@@ -103,7 +103,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Smoke
         id: smoke

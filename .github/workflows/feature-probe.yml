@@ -61,7 +61,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Feature probe row
         id: probe
@@ -101,7 +101,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - run: |
           MOLT_FEATURE_AGP=8.0.2 MOLT_FEATURE_GRADLE=8.0 FEATURE_PROBE_TIER=gate ./tools/feature-probe.sh
       - name: Upload probe results on failure
@@ -125,7 +125,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - run: FEATURE_PROBE_TIER=nightly ./tools/feature-probe.sh
 
   feature-probe-cross-agp:
@@ -151,7 +151,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - run: |
           ./gradlew :plugin:moltObfuscateFeatureProbeTest \
             -PmoltFeature=${{ matrix.feature }} \
@@ -191,6 +191,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - run: ./gradlew :plugin:publishToMavenLocal
       - run: FEATURE_PROBE_TIER=weekly ./tools/feature-probe.sh
